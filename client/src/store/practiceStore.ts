@@ -1,4 +1,4 @@
-import Dexie from "dexie";
+﻿import Dexie from "dexie";
 import { create } from "zustand";
 import { nanoid } from "nanoid";
 import { devtools } from "zustand/middleware";
@@ -65,27 +65,12 @@ const defaultSettings: AppSettings = {
 const seededJournalTemplates: JournalTemplate[] = [
   {
     id: "template-default",
-    name: "Daily Reflection",
-    description: "Quickly capture gratitude, insights, and reminders.",
+    name: "每日省思",
+    description: "快速記錄今日心得、感恩與提醒",
     fields: [
-      {
-        id: "gratitude",
-        label: "Gratitude",
-        placeholder: "People or things you are thankful for",
-        required: false
-      },
-      {
-        id: "insight",
-        label: "Insight",
-        placeholder: "Today's key learnings or adjustments",
-        required: true
-      },
-      {
-        id: "reminder",
-        label: "Reminder",
-        placeholder: "Focus points for tomorrow",
-        required: false
-      }
+      { id: "gratitude", label: "感恩", placeholder: "感謝的人事物", required: false },
+      { id: "insight", label: "心得", placeholder: "今日修行的收穫或調整", required: true },
+      { id: "reminder", label: "提醒", placeholder: "明日可優化的重點", required: false }
     ]
   }
 ];
@@ -124,6 +109,7 @@ type PracticeStore = {
   addTask: (input: Omit<PracticeTask, "id"> & { id?: string }) => Promise<string>;
   updateTask: (id: string, update: Partial<PracticeTask>) => Promise<void>;
   reorderTasks: (ids: string[]) => Promise<void>;
+  removeTask: (id: string) => Promise<void>;
   addDailyRecord: (input: Omit<DailyRecord, "id" | "lastModified">) => Promise<void>;
   bulkUpsertDailyRecords: (records: Omit<DailyRecord, "lastModified">[]) => Promise<void>;
   addGoal: (input: Omit<PracticeGoal, "id" | "createdAt"> & { id?: string }) => Promise<string>;
@@ -310,6 +296,19 @@ export const usePracticeStore = create<PracticeStore>()(
         set({ tasks: updated });
         await registerOperation("task.upsert", updated);
       },
+      async removeTask(id) {
+        await db.transaction("rw", db.tasks, db.records, db.goals, async () => {
+          await db.records.where({ taskId: id }).delete();
+          await db.goals.where({ taskId: id }).delete();
+          await db.tasks.delete(id);
+        });
+        set({
+          tasks: get().tasks.filter((t) => t.id !== id),
+          records: get().records.filter((r) => r.taskId !== id),
+          goals: get().goals.filter((g) => g.taskId !== id)
+        });
+        await registerOperation("task.delete", { id });
+      },
       async addDailyRecord(input) {
         const id = buildRecordKey(input.taskId, input.date);
         const payload: DailyRecord = {
@@ -483,3 +482,7 @@ export const usePracticeStore = create<PracticeStore>()(
     };
   }, { name: "practice-store" })
 );
+
+
+
+

@@ -1,6 +1,6 @@
 ﻿import { useMemo } from "react";
 import dayjs from "dayjs";
-import { FiPlus, FiMinus, FiRefreshCw } from "react-icons/fi";
+import { FiPlus, FiMinus, FiRefreshCw, FiEdit3 } from "react-icons/fi";
 import { usePracticeStore } from "../store/practiceStore";
 import { calculateGoalProgress, getRecordForDate, sumDaily } from "../utils/practice";
 
@@ -30,22 +30,26 @@ function TodayPage() {
   async function handleAdjust(taskId: string, delta: number) {
     const current = getRecordForDate(records, taskId, today);
     const nextCount = Math.max(0, (current?.count ?? 0) + delta);
-    await addDailyRecord({
-      taskId,
-      date: today,
-      count: nextCount
-    });
+    await addDailyRecord({ taskId, date: today, count: nextCount, note: current?.note });
   }
 
   async function handleCustom(taskId: string) {
     const value = window.prompt("輸入數量", String(getRecordForDate(records, taskId, today)?.count ?? 0));
-    if (!value) return;
+    if (value === null) return;
     const parsed = Number(value);
     if (Number.isNaN(parsed)) {
       window.alert("請輸入數字");
       return;
     }
-    await addDailyRecord({ taskId, date: today, count: Math.max(0, parsed) });
+    const current = getRecordForDate(records, taskId, today);
+    await addDailyRecord({ taskId, date: today, count: Math.max(0, parsed), note: current?.note });
+  }
+
+  async function handleNote(taskId: string) {
+    const current = getRecordForDate(records, taskId, today);
+    const note = window.prompt("輸入今日心得（可留空移除）", current?.note ?? "");
+    if (note === null) return;
+    await addDailyRecord({ taskId, date: today, count: current?.count ?? 0, note: note || undefined });
   }
 
   async function handleCopyYesterday() {
@@ -53,12 +57,7 @@ function TodayPage() {
       .map((task) => {
         const yesterdayRecord = getRecordForDate(records, task.id, yesterday);
         if (!yesterdayRecord) return undefined;
-        return {
-          taskId: task.id,
-          date: today,
-          count: yesterdayRecord.count,
-          note: yesterdayRecord.note
-        };
+        return { taskId: task.id, date: today, count: yesterdayRecord.count, note: yesterdayRecord.note };
       })
       .filter(Boolean) as Array<{ taskId: string; date: string; count: number; note?: string }>;
     if (copyRecords.length === 0) {
@@ -101,9 +100,8 @@ function TodayPage() {
                     <h3 className="text-lg font-semibold" style={{ color: task.color }}>
                       {task.name}
                     </h3>
-                    <p className="text-sm text-slate-500">
-                      今日已完成 {record?.count ?? 0} {task.unit}
-                    </p>
+                    <p className="text-sm text-slate-500">今日已完成 {record?.count ?? 0} 次</p>
+                    {record?.note && <p className="mt-1 text-xs text-slate-500">心得：{record.note}</p>}
                   </div>
                 </div>
                 <div className="mt-4 flex items-center gap-3">
@@ -133,6 +131,13 @@ function TodayPage() {
                   >
                     自訂輸入
                   </button>
+                  <button
+                    type="button"
+                    className="ml-2 inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 transition hover:border-primary hover:text-primary"
+                    onClick={() => handleNote(task.id)}
+                  >
+                    <FiEdit3 className="h-4 w-4" /> 記事
+                  </button>
                 </div>
               </article>
             );
@@ -154,15 +159,10 @@ function TodayPage() {
                       {progress.isBehind ? <span className="ml-2 text-rose-500">進度落後</span> : ""}
                     </p>
                   </div>
-                  <span className="text-xs text-slate-500">
-                    建議每日 {Number.isFinite(progress.suggestedDaily) ? Math.ceil(progress.suggestedDaily) : 0}
-                  </span>
+                  <span className="text-xs text-slate-500">建議每日 {Number.isFinite(progress.suggestedDaily) ? Math.ceil(progress.suggestedDaily) : 0}</span>
                 </div>
                 <div className="h-2 w-full rounded-full bg-slate-200">
-                  <div
-                    className="h-2 rounded-full bg-primary"
-                    style={{ width: `${Math.min(100, progress.progress * 100)}%` }}
-                  />
+                  <div className="h-2 rounded-full bg-primary" style={{ width: `${Math.min(100, progress.progress * 100)}%` }} />
                 </div>
               </div>
             ))}
@@ -174,3 +174,4 @@ function TodayPage() {
 }
 
 export default TodayPage;
+

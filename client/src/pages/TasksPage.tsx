@@ -2,15 +2,14 @@
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FiEdit2, FiArrowUp, FiArrowDown, FiCheck, FiX } from "react-icons/fi";
+import { FiEdit2, FiArrowUp, FiArrowDown, FiCheck, FiX, FiTrash2 } from "react-icons/fi";
 import clsx from "clsx";
 import { usePracticeStore } from "../store/practiceStore";
 import type { PracticeTask } from "../types";
 
 const taskSchema = z.object({
   name: z.string().min(1, "不可空白"),
-  category: z.enum(["chanting", "sutra", "meditation", "charity", "custom"]),
-  unit: z.string().min(1, "請填寫單位"),
+  category: z.string().min(1, "請輸入分類"),
   color: z.string().regex(/^#/, "請輸入色碼"),
   allowReminder: z.boolean(),
   includeInDashboard: z.boolean()
@@ -18,33 +17,20 @@ const taskSchema = z.object({
 
 type TaskFormValues = z.infer<typeof taskSchema>;
 
-const CATEGORY_LABEL: Record<TaskFormValues["category"], string> = {
-  chanting: "持咒",
-  sutra: "抄經",
-  meditation: "禪修",
-  charity: "行善",
-  custom: "自訂"
-};
-
 function TasksPage() {
   const tasks = usePracticeStore((state) => [...state.tasks].sort((a, b) => a.order - b.order));
   const addTask = usePracticeStore((state) => state.addTask);
   const updateTask = usePracticeStore((state) => state.updateTask);
   const reorderTasks = usePracticeStore((state) => state.reorderTasks);
+  const removeTask = usePracticeStore((state) => state.removeTask);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<TaskFormValues | null>(null);
 
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors }
-  } = useForm<TaskFormValues>({
+  const { register, handleSubmit, reset, formState: { errors } } = useForm<TaskFormValues>({
     resolver: zodResolver(taskSchema),
     defaultValues: {
       name: "",
-      category: "chanting",
-      unit: "遍",
+      category: "",
       color: "#a855f7",
       allowReminder: true,
       includeInDashboard: true
@@ -56,7 +42,7 @@ function TasksPage() {
       ...values,
       order: tasks.length,
       isActive: true
-    });
+    } as unknown as PracticeTask);
     reset();
   }
 
@@ -64,8 +50,7 @@ function TasksPage() {
     setEditingId(task.id);
     setEditValues({
       name: task.name,
-      category: task.category,
-      unit: task.unit,
+      category: String(task.category ?? ""),
       color: task.color,
       allowReminder: task.allowReminder,
       includeInDashboard: task.includeInDashboard
@@ -84,12 +69,14 @@ function TasksPage() {
       window.alert(result.error.issues.map((issue) => issue.message).join("\n"));
       return;
     }
-    await updateTask(task.id, result.data);
+    await updateTask(task.id, result.data as Partial<PracticeTask>);
     handleCancelEdit();
   }
 
-  async function handleToggleActive(task: PracticeTask) {
-    await updateTask(task.id, { isActive: !task.isActive });
+  async function handleDelete(task: PracticeTask) {
+    const ok = window.confirm(`確定要刪除「${task.name}」？此操作會一併刪除其相關紀錄與目標。`);
+    if (!ok) return;
+    await removeTask(task.id);
   }
 
   async function moveTask(task: PracticeTask, direction: "up" | "down") {
@@ -114,9 +101,7 @@ function TasksPage() {
                   <h3 className="text-lg font-semibold" style={{ color: task.color }}>
                     {task.name}
                   </h3>
-                  <p className="text-sm text-slate-500">
-                    {CATEGORY_LABEL[task.category]}・單位：{task.unit}
-                  </p>
+                  <p className="text-sm text-slate-500">分類：{String(task.category || "未分類")}</p>
                   <p className="text-xs text-slate-400">
                     {task.allowReminder ? "提醒已啟用" : "提醒未啟用"}／
                     {task.includeInDashboard ? "儀表板顯示" : "儀表板隱藏"}
@@ -141,10 +126,11 @@ function TasksPage() {
                   </button>
                   <button
                     type="button"
-                    className="rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-500 hover:border-primary hover:text-primary"
-                    onClick={() => handleToggleActive(task)}
+                    className="rounded-full border border-rose-200 p-2 text-rose-500 hover:border-rose-400"
+                    onClick={() => handleDelete(task)}
+                    aria-label="刪除"
                   >
-                    {task.isActive ? "停用" : "啟用"}
+                    <FiTrash2 />
                   </button>
                   <button
                     type="button"
@@ -171,26 +157,11 @@ function TasksPage() {
                   </div>
                   <div>
                     <label className="block text-xs text-slate-500">分類</label>
-                    <select
-                      className="w-full rounded-lg border border-slate-200 px-3 py-2"
-                      value={editValues.category}
-                      onChange={(event) =>
-                        setEditValues({ ...editValues, category: event.target.value as TaskFormValues["category"] })
-                      }
-                    >
-                      {Object.entries(CATEGORY_LABEL).map(([value, label]) => (
-                        <option value={value} key={value}>
-                          {label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-500">單位</label>
                     <input
                       className="w-full rounded-lg border border-slate-200 px-3 py-2"
-                      value={editValues.unit}
-                      onChange={(event) => setEditValues({ ...editValues, unit: event.target.value })}
+                      value={editValues.category}
+                      onChange={(event) => setEditValues({ ...editValues, category: event.target.value })}
+                      placeholder="例如：持咒、抄經、禪修..."
                     />
                   </div>
                   <div>
@@ -250,17 +221,8 @@ function TasksPage() {
           </div>
           <div>
             <label className="block text-xs text-slate-500">分類</label>
-            <select className="w-full rounded-lg border border-slate-200 px-3 py-2" {...register("category")}>
-              {Object.entries(CATEGORY_LABEL).map(([value, label]) => (
-                <option value={value} key={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs text-slate-500">單位</label>
-            <input className="w-full rounded-lg border border-slate-200 px-3 py-2" {...register("unit")} />
+            <input className="w-full rounded-lg border border-slate-200 px-3 py-2" {...register("category")} placeholder="例如：持咒、抄經、禪修..." />
+            {errors.category && <p className="mt-1 text-xs text-rose-500">{errors.category.message}</p>}
           </div>
           <div>
             <label className="block text-xs text-slate-500">顏色</label>

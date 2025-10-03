@@ -1,17 +1,11 @@
 ﻿export type UUID = string;
 
-export type PracticeCategory =
-  | "chanting"
-  | "sutra"
-  | "meditation"
-  | "charity"
-  | "custom";
+export type PracticeCategory = string;
 
 export type PracticeTask = {
   id: UUID;
   name: string;
-  category: PracticeCategory;
-  unit: string;
+  category: PracticeCategory;
   color: string;
   isActive: boolean;
   allowReminder: boolean;
@@ -175,3 +169,4 @@ export type RemoteSnapshot = {
   snapshot: PracticeStateSnapshot;
   updatedAt: string;
 };
+

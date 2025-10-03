@@ -1,13 +1,13 @@
 ﻿import { useEffect, useRef, useState } from "react";
 import { usePracticeStore } from "../store/practiceStore";
-import type { AppearanceSettings, SyncSettings } from "../types";
+import type { SyncSettings } from "../types";
+import { supabase } from "../lib/supabaseClient";
 
 function SettingsPage() {
   const settings = usePracticeStore((state) => state.settings);
   const updateSettings = usePracticeStore((state) => state.updateSettings);
   const exportSnapshot = usePracticeStore((state) => state.exportSnapshot);
   const importSnapshot = usePracticeStore((state) => state.importSnapshot);
-  const userId = usePracticeStore((state) => state.userId);
   const setUser = usePracticeStore((state) => state.setUser);
   const syncStatus = usePracticeStore((state) => state.syncStatus);
   const syncError = usePracticeStore((state) => state.syncError);
@@ -15,28 +15,34 @@ function SettingsPage() {
   const syncNow = usePracticeStore((state) => state.syncNow);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [exporting, setExporting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [userIdInput, setUserIdInput] = useState(userId ?? "");
-  const [linking, setLinking] = useState(false);
-  const pendingCount = pendingOperations.length;
+  const [userEmail, setUserEmail] = useState<string | null>(null);
 
   useEffect(() => {
-    setUserIdInput(userId ?? "");
-  }, [userId]);
-
-  async function handleAppearanceChange(update: Partial<AppearanceSettings>) {
-    await updateSettings({ appearance: { ...settings.appearance, ...update } });
-    setMessage("外觀設定已更新");
-  }
+    (async () => {
+      if (!supabase) return;
+      const { data } = await supabase.auth.getSession();
+      if (data.session?.user) {
+        setUser(data.session.user.id, { forceReload: true });
+        setUserEmail(data.session.user.email ?? null);
+      }
+      supabase.auth.onAuthStateChange(async (event, session) => {
+        if (session?.user) {
+          setUser(session.user.id, { forceReload: true });
+          setUserEmail(session.user.email ?? null);
+        } else {
+          setUser(null);
+          setUserEmail(null);
+        }
+      });
+    })();
+  }, [setUser]);
 
   async function handleSyncChange(update: Partial<SyncSettings>) {
     await updateSettings({ sync: { ...settings.sync, ...update } });
     setMessage("同步設定已更新");
-  }
-
-  async function handleToggleOnboarding() {
-    await updateSettings({ onboardingCompleted: !settings.onboardingCompleted });
   }
 
   async function handleExport() {
@@ -71,48 +77,28 @@ function SettingsPage() {
       console.error(error);
       setMessage("匯入失敗，檔案格式不正確");
     } finally {
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  async function handleGoogleConnect() {
+    if (!supabase) return;
+    await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        scopes: "openid email profile https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/spreadsheets",
+        redirectTo: `${window.location.origin}/auth/callback`
       }
-    }
+    });
   }
 
-  async function handleLinkUser() {
-    const trimmed = userIdInput.trim();
-    if (!trimmed) {
-      setMessage("請輸入使用者 ID");
-      return;
-    }
-    try {
-      setLinking(true);
-      await setUser(trimmed, { forceReload: true });
-      setMessage("已更新使用者 ID");
-      if (!settings.sync.enableSync) {
-        await handleSyncChange({ enableSync: true });
-      }
-    } catch (error) {
-      console.error(error);
-      setMessage("設定使用者 ID 失敗");
-    } finally {
-      setLinking(false);
-    }
+  async function handleSignOut() {
+    if (!supabase) return;
+    await supabase.auth.signOut();
+    setMessage("已登出");
   }
 
-  async function handleSyncToggle(checked: boolean) {
-    if (checked && !userIdInput.trim()) {
-      setMessage("請先設定使用者 ID 再啟用同步");
-      return;
-    }
-    await handleSyncChange({ enableSync: checked });
-    if (checked && userIdInput.trim()) {
-      await syncNow();
-    }
-  }
-
-  async function handleManualSync() {
-    await syncNow();
-    setMessage("已觸發同步");
-  }
+  const pendingCount = pendingOperations.length;
 
   return (
     <div className="space-y-6">
@@ -121,111 +107,34 @@ function SettingsPage() {
       )}
 
       <section className="rounded-2xl bg-white p-4 shadow-sm sm:p-6">
-        <h2 className="text-lg font-semibold">外觀設定</h2>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className="block text-xs text-slate-500">主題</label>
-            <select
-              className="w-full rounded-lg border border-slate-200 px-3 py-2"
-              value={settings.appearance.theme}
-              onChange={(event) => handleAppearanceChange({ theme: event.target.value as AppearanceSettings["theme"] })}
-            >
-              <option value="auto">跟隨系統</option>
-              <option value="light">淺色</option>
-              <option value="dark">深色</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs text-slate-500">字體大小</label>
-            <select
-              className="w-full rounded-lg border border-slate-200 px-3 py-2"
-              value={settings.appearance.fontScale}
-              onChange={(event) =>
-                handleAppearanceChange({ fontScale: Number(event.target.value) as AppearanceSettings["fontScale"] })
-              }
-            >
-              <option value={0.875}>小</option>
-              <option value={1}>一般</option>
-              <option value={1.125}>大</option>
-              <option value={1.25}>更大</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs text-slate-500">卡片樣式</label>
-            <select
-              className="w-full rounded-lg border border-slate-200 px-3 py-2"
-              value={settings.appearance.cardStyle}
-              onChange={(event) =>
-                handleAppearanceChange({ cardStyle: event.target.value as AppearanceSettings["cardStyle"] })
-              }
-            >
-              <option value="comfortable">舒適</option>
-              <option value="compact">緊湊</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs text-slate-500">重點色</label>
-            <input
-              type="color"
-              className="h-10 w-full cursor-pointer rounded-lg border border-slate-200"
-              value={settings.appearance.accentColor}
-              onChange={(event) => handleAppearanceChange({ accentColor: event.target.value })}
-            />
-          </div>
-        </div>
-      </section>
-
-      <section className="rounded-2xl bg-white p-4 shadow-sm sm:p-6">
-        <h2 className="text-lg font-semibold">匯出 / 匯入</h2>
-        <p className="text-sm text-slate-500">將所有功課、紀錄、目標、記事與設定打包備份。</p>
-        <div className="mt-4 flex flex-wrap gap-3">
+        <h2 className="text-lg font-semibold">帳號</h2>
+        <div className="mt-3 flex items-center gap-3 text-sm text-slate-600">
+          <span>Google：{userEmail ?? "未連結"}</span>
           <button
             type="button"
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-            onClick={handleExport}
-            disabled={exporting}
+            className="rounded-lg border border-primary px-3 py-1 text-sm text-primary"
+            onClick={handleGoogleConnect}
           >
-            {exporting ? "匯出中..." : "匯出 JSON"}
+            連結 Google
           </button>
           <button
             type="button"
-            className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600"
-            onClick={() => fileInputRef.current?.click()}
+            className="rounded-lg border border-slate-200 px-3 py-1 text-sm text-slate-600"
+            onClick={handleSignOut}
           >
-            匯入 JSON
+            登出
           </button>
-          <input ref={fileInputRef} type="file" accept="application/json" className="hidden" onChange={handleImport} />
         </div>
       </section>
 
       <section className="rounded-2xl bg-white p-4 shadow-sm sm:p-6">
         <h2 className="text-lg font-semibold">同步設定（Supabase）</h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <div className="sm:col-span-2">
-            <label className="block text-xs text-slate-500">使用者 ID</label>
-            <div className="mt-1 flex gap-2">
-              <input
-                className="flex-1 rounded-lg border border-slate-200 px-3 py-2"
-                value={userIdInput}
-                onChange={(event) => setUserIdInput(event.target.value)}
-                placeholder="輸入 Supabase 使用者 UUID"
-              />
-              <button
-                type="button"
-                className="rounded-lg border border-primary px-3 py-2 text-sm font-semibold text-primary disabled:opacity-60"
-                onClick={handleLinkUser}
-                disabled={linking}
-              >
-                {linking ? "連結中..." : "儲存"}
-              </button>
-            </div>
-            <p className="mt-1 text-xs text-slate-500">此 ID 用於辨識雲端帳號，需與 Supabase Auth 一致。</p>
-          </div>
           <label className="flex items-center gap-3 text-sm">
             <input
               type="checkbox"
               checked={settings.sync.enableSync}
-              onChange={(event) => handleSyncToggle(event.target.checked)}
+              onChange={(event) => handleSyncChange({ enableSync: event.target.checked })}
             />
             啟用雲端同步
           </label>
@@ -244,12 +153,11 @@ function SettingsPage() {
             </select>
           </div>
           <div>
-            <label className="block text-xs text-slate-500">分表策略</label>
+            <label className="block text-xs text-slate-500">分表策略（Google 匯出時使用）</label>
             <select
               className="w-full rounded-lg border border-slate-200 px-3 py-2"
               value={settings.sync.strategy}
               onChange={(event) => handleSyncChange({ strategy: event.target.value as SyncSettings["strategy"] })}
-              disabled={!settings.sync.enableSync}
             >
               <option value="single-sheet">同一張</option>
               <option value="weekly">每週</option>
@@ -263,7 +171,6 @@ function SettingsPage() {
               className="w-full rounded-lg border border-slate-200 px-3 py-2"
               value={settings.sync.template}
               onChange={(event) => handleSyncChange({ template: event.target.value })}
-              disabled={!settings.sync.enableSync}
             />
           </div>
         </div>
@@ -274,7 +181,7 @@ function SettingsPage() {
           <button
             type="button"
             className="rounded-lg border border-primary px-3 py-1 text-sm text-primary disabled:opacity-60"
-            onClick={handleManualSync}
+            onClick={() => syncNow()}
             disabled={!settings.sync.enableSync}
           >
             立即同步
@@ -284,15 +191,24 @@ function SettingsPage() {
       </section>
 
       <section className="rounded-2xl bg-white p-4 shadow-sm sm:p-6">
-        <h2 className="text-lg font-semibold">系統其他</h2>
-        <div className="mt-4 space-y-3 text-sm text-slate-600">
+        <h2 className="text-lg font-semibold">匯出 / 匯入</h2>
+        <div className="mt-4 flex flex-wrap gap-3">
           <button
             type="button"
-            className="rounded-lg border border-slate-200 px-4 py-2"
-            onClick={handleToggleOnboarding}
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+            onClick={handleExport}
+            disabled={exporting}
           >
-            {settings.onboardingCompleted ? "重新啟動新手教學" : "標記新手教學為完成"}
+            {exporting ? "匯出中..." : "匯出 JSON"}
           </button>
+          <button
+            type="button"
+            className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            匯入 JSON
+          </button>
+          <input ref={fileInputRef} type="file" accept="application/json" className="hidden" onChange={handleImport} />
         </div>
       </section>
     </div>
