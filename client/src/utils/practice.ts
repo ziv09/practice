@@ -54,14 +54,15 @@ export function sumDaily(records: DailyRecord[], date: string) {
 export function getStreak(records: DailyRecord[], taskId: string, upToDate: string) {
   let streak = 0;
   let current = dayjs(upToDate);
-  while (true) {
+  let keepChecking = true;
+  while (keepChecking) {
     const date = current.format("YYYY-MM-DD");
     const record = getRecordForDate(records, taskId, date);
     if (record && record.count > 0) {
       streak += 1;
       current = current.subtract(1, "day");
     } else {
-      break;
+      keepChecking = false;
     }
   }
   return streak;

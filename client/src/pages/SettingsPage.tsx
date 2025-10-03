@@ -1,4 +1,4 @@
-﻿import { useRef, useState } from "react";
+﻿import { useEffect, useRef, useState } from "react";
 import { usePracticeStore } from "../store/practiceStore";
 import type { AppearanceSettings, SyncSettings } from "../types";
 
@@ -7,9 +7,23 @@ function SettingsPage() {
   const updateSettings = usePracticeStore((state) => state.updateSettings);
   const exportSnapshot = usePracticeStore((state) => state.exportSnapshot);
   const importSnapshot = usePracticeStore((state) => state.importSnapshot);
+  const userId = usePracticeStore((state) => state.userId);
+  const setUser = usePracticeStore((state) => state.setUser);
+  const syncStatus = usePracticeStore((state) => state.syncStatus);
+  const syncError = usePracticeStore((state) => state.syncError);
+  const pendingOperations = usePracticeStore((state) => state.pendingOperations);
+  const syncNow = usePracticeStore((state) => state.syncNow);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [exporting, setExporting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [userIdInput, setUserIdInput] = useState(userId ?? "");
+  const [linking, setLinking] = useState(false);
+  const pendingCount = pendingOperations.length;
+
+  useEffect(() => {
+    setUserIdInput(userId ?? "");
+  }, [userId]);
 
   async function handleAppearanceChange(update: Partial<AppearanceSettings>) {
     await updateSettings({ appearance: { ...settings.appearance, ...update } });
@@ -61,6 +75,43 @@ function SettingsPage() {
         fileInputRef.current.value = "";
       }
     }
+  }
+
+  async function handleLinkUser() {
+    const trimmed = userIdInput.trim();
+    if (!trimmed) {
+      setMessage("請輸入使用者 ID");
+      return;
+    }
+    try {
+      setLinking(true);
+      await setUser(trimmed, { forceReload: true });
+      setMessage("已更新使用者 ID");
+      if (!settings.sync.enableSync) {
+        await handleSyncChange({ enableSync: true });
+      }
+    } catch (error) {
+      console.error(error);
+      setMessage("設定使用者 ID 失敗");
+    } finally {
+      setLinking(false);
+    }
+  }
+
+  async function handleSyncToggle(checked: boolean) {
+    if (checked && !userIdInput.trim()) {
+      setMessage("請先設定使用者 ID 再啟用同步");
+      return;
+    }
+    await handleSyncChange({ enableSync: checked });
+    if (checked && userIdInput.trim()) {
+      await syncNow();
+    }
+  }
+
+  async function handleManualSync() {
+    await syncNow();
+    setMessage("已觸發同步");
   }
 
   return (
@@ -148,15 +199,35 @@ function SettingsPage() {
       </section>
 
       <section className="rounded-2xl bg-white p-4 shadow-sm sm:p-6">
-        <h2 className="text-lg font-semibold">同步設定（Google 功能預留）</h2>
+        <h2 className="text-lg font-semibold">同步設定（Supabase）</h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <label className="block text-xs text-slate-500">使用者 ID</label>
+            <div className="mt-1 flex gap-2">
+              <input
+                className="flex-1 rounded-lg border border-slate-200 px-3 py-2"
+                value={userIdInput}
+                onChange={(event) => setUserIdInput(event.target.value)}
+                placeholder="輸入 Supabase 使用者 UUID"
+              />
+              <button
+                type="button"
+                className="rounded-lg border border-primary px-3 py-2 text-sm font-semibold text-primary disabled:opacity-60"
+                onClick={handleLinkUser}
+                disabled={linking}
+              >
+                {linking ? "連結中..." : "儲存"}
+              </button>
+            </div>
+            <p className="mt-1 text-xs text-slate-500">此 ID 用於辨識雲端帳號，需與 Supabase Auth 一致。</p>
+          </div>
           <label className="flex items-center gap-3 text-sm">
             <input
               type="checkbox"
               checked={settings.sync.enableSync}
-              onChange={(event) => handleSyncChange({ enableSync: event.target.checked })}
+              onChange={(event) => handleSyncToggle(event.target.checked)}
             />
-            啟用雲端同步（開發中）
+            啟用雲端同步
           </label>
           <div>
             <label className="block text-xs text-slate-500">同步範圍</label>
@@ -196,8 +267,20 @@ function SettingsPage() {
             />
           </div>
         </div>
-        {settings.sync.lastError && <p className="mt-2 text-sm text-rose-500">上次錯誤：{settings.sync.lastError}</p>}
-        {settings.sync.lastSyncedAt && <p className="mt-1 text-xs text-slate-400">最後同步：{settings.sync.lastSyncedAt}</p>}
+        <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-slate-600">
+          <span>狀態：{syncStatus === "idle" ? "待命" : syncStatus === "syncing" ? "同步中" : syncStatus === "error" ? "錯誤" : "離線"}</span>
+          {pendingCount > 0 && <span>待送作業：{pendingCount}</span>}
+          {settings.sync.lastSyncedAt && <span>最後同步：{settings.sync.lastSyncedAt}</span>}
+          <button
+            type="button"
+            className="rounded-lg border border-primary px-3 py-1 text-sm text-primary disabled:opacity-60"
+            onClick={handleManualSync}
+            disabled={!settings.sync.enableSync}
+          >
+            立即同步
+          </button>
+        </div>
+        {syncError && <p className="mt-2 text-sm text-rose-500">同步錯誤：{syncError}</p>}
       </section>
 
       <section className="rounded-2xl bg-white p-4 shadow-sm sm:p-6">

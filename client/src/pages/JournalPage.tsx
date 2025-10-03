@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import dayjs from "dayjs";
-import { FiPlusCircle, FiPushpin, FiTrash2, FiEdit2 } from "react-icons/fi";
+import { FiPlusCircle, FiBookmark, FiTrash2, FiEdit2 } from "react-icons/fi";
 import clsx from "clsx";
 import { usePracticeStore } from "../store/practiceStore";
 
@@ -247,7 +247,7 @@ function JournalPage() {
                 <div className="flex items-center gap-2 text-sm text-slate-500">
                   {entry.pin && (
                     <span className="inline-flex items-center gap-1 text-primary">
-                      <FiPushpin /> 置頂
+                      <FiBookmark /> 置頂
                     </span>
                   )}
                   {entry.mood && <span>{moodLabel[entry.mood]}</span>}

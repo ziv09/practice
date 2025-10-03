@@ -6,10 +6,11 @@ import type {
   JournalEntry,
   DashboardWidget,
   AppSettings,
-  JournalTemplate
+  JournalTemplate,
+  PendingOperation
 } from "../types";
 
-const DB_VERSION = 1;
+const DB_NAME = "practice-db";
 
 export class PracticeDatabase extends Dexie {
   tasks!: Table<PracticeTask, string>;
@@ -19,10 +20,11 @@ export class PracticeDatabase extends Dexie {
   widgets!: Table<DashboardWidget, string>;
   templates!: Table<JournalTemplate, string>;
   settings!: Table<AppSettings, string>;
+  operations!: Table<PendingOperation, string>;
 
   constructor() {
-    super("practice-db");
-    this.version(DB_VERSION).stores({
+    super(DB_NAME);
+    this.version(1).stores({
       tasks: "id, order, category, isActive",
       records: "id, date, taskId",
       goals: "id, taskId, endDate",
@@ -31,6 +33,21 @@ export class PracticeDatabase extends Dexie {
       templates: "id",
       settings: "&id"
     });
+
+    this.version(2)
+      .stores({
+        tasks: "id, order, category, isActive",
+        records: "id, date, taskId",
+        goals: "id, taskId, endDate",
+        journal: "id, date, tags",
+        widgets: "id, type",
+        templates: "id",
+        settings: "&id",
+        operations: "id, type, createdAt"
+      })
+      .upgrade(async (trans) => {
+        await trans.table("operations").clear();
+      });
   }
 }
 

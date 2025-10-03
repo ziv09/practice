@@ -147,3 +147,31 @@ export type PracticeStateSnapshot = {
   settings: AppSettings;
   version: number;
 };
+
+export type PendingOperationType =
+  | "task.upsert"
+  | "task.delete"
+  | "record.upsert"
+  | "record.delete"
+  | "goal.upsert"
+  | "goal.delete"
+  | "journal.upsert"
+  | "journal.delete"
+  | "widget.upsert"
+  | "settings.update";
+
+export type PendingOperation = {
+  id: UUID;
+  userId?: UUID;
+  type: PendingOperationType;
+  payload: unknown;
+  createdAt: string;
+  syncedAt?: string;
+};
+
+export type SyncStatus = "idle" | "syncing" | "offline" | "error";
+
+export type RemoteSnapshot = {
+  snapshot: PracticeStateSnapshot;
+  updatedAt: string;
+};

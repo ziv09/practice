@@ -24,7 +24,6 @@ function GoalsPage() {
   const goals = usePracticeStore((state) => state.goals);
   const records = usePracticeStore((state) => state.records);
   const addGoal = usePracticeStore((state) => state.addGoal);
-  const updateGoal = usePracticeStore((state) => state.updateGoal);
   const removeGoal = usePracticeStore((state) => state.removeGoal);
   const [showForm, setShowForm] = useState(false);
 

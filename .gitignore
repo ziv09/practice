@@ -1,0 +1,6 @@
+﻿client/node_modules/
+client/dist/
+client/.vite/
+client/temp_write.py
+client/.env*
+client/coverage/
