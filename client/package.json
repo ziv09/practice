@@ -1,0 +1,48 @@
+﻿{
+  "name": "practice-pwa",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "eslint \"src/**/*.{ts,tsx}\" --max-warnings=0",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "3.9.0",
+    "chart.js": "4.4.6",
+    "clsx": "2.1.1",
+    "dayjs": "1.11.13",
+    "dexie": "4.0.4",
+    "nanoid": "5.0.7",
+    "react": "18.3.1",
+    "react-chartjs-2": "5.3.0",
+    "react-dom": "18.3.1",
+    "react-hook-form": "7.52.1",
+    "react-icons": "5.3.0",
+    "react-router-dom": "6.27.0",
+    "zod": "3.23.8",
+    "zustand": "4.5.4"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "6.5.0",
+    "@testing-library/react": "16.1.0",
+    "@testing-library/user-event": "14.5.2",
+    "@types/node": "22.7.4",
+    "@types/react": "18.3.5",
+    "@types/react-dom": "18.3.0",
+    "@vitejs/plugin-react": "4.3.2",
+    "autoprefixer": "10.4.20",
+    "eslint": "8.57.0",
+    "eslint-config-prettier": "9.1.0",
+    "eslint-plugin-react": "7.34.3",
+    "postcss": "8.4.47",
+    "tailwindcss": "3.4.12",
+    "typescript": "5.6.2",
+    "vite": "5.4.8",
+    "vite-plugin-pwa": "0.17.6",
+    "vitest": "2.1.1"
+  }
+}
