@@ -1,4 +1,4 @@
-﻿import Dexie from "dexie";
+import Dexie from "dexie";
 import { create } from "zustand";
 import { nanoid } from "nanoid";
 import { devtools } from "zustand/middleware";
@@ -15,34 +15,18 @@ import type {
   PracticeTask,
   PracticeStateSnapshot,
   ReminderRule,
-  SyncStatus
+  SyncStatus,
+  Category
 } from "../types";
 import { buildRecordKey } from "../utils/practice";
-import {
-  fetchRemoteSnapshot,
-  pushPendingOperations,
-  upsertRemoteSnapshot
-} from "../services/supabaseSync";
+import { fetchRemoteSnapshot, pushPendingOperations, upsertRemoteSnapshot } from "../services/supabaseSync";
 
-const DEFAULT_COLOR_PALETTE = [
-  "#0284c7",
-  "#ca8a04",
-  "#22c55e",
-  "#a855f7",
-  "#fb7185",
-  "#f97316"
-];
-
+const DEFAULT_COLOR_PALETTE = ["#0284c7", "#ca8a04", "#22c55e", "#a855f7", "#fb7185", "#f97316"];
 const SETTINGS_ID = "app-settings";
 
 const defaultSettings: AppSettings = {
   id: SETTINGS_ID,
-  appearance: {
-    theme: "auto",
-    accentColor: "#a855f7",
-    cardStyle: "comfortable",
-    fontScale: 1
-  },
+  appearance: { theme: "auto", accentColor: "#a855f7", cardStyle: "comfortable", fontScale: 1 },
   reminder: {
     enabled: false,
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -65,12 +49,12 @@ const defaultSettings: AppSettings = {
 const seededJournalTemplates: JournalTemplate[] = [
   {
     id: "template-default",
-    name: "每日省思",
-    description: "快速記錄今日心得、感恩與提醒",
+    name: "預設",
+    description: "記錄感恩、洞見與提醒",
     fields: [
       { id: "gratitude", label: "感恩", placeholder: "感謝的人事物", required: false },
-      { id: "insight", label: "心得", placeholder: "今日修行的收穫或調整", required: true },
-      { id: "reminder", label: "提醒", placeholder: "明日可優化的重點", required: false }
+      { id: "insight", label: "洞見", placeholder: "今日所學或發現", required: true },
+      { id: "reminder", label: "提醒", placeholder: "給明天的提示", required: false }
     ]
   }
 ];
@@ -80,9 +64,7 @@ function createId(prefix: string) {
     if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
       return `${prefix}-${crypto.randomUUID()}`;
     }
-  } catch (error) {
-    // ignore runtime errors and fall back to nanoid
-  }
+  } catch {}
   return `${prefix}-${nanoid()}`;
 }
 
@@ -101,6 +83,7 @@ type PracticeStore = {
   journalEntries: JournalEntry[];
   widgets: DashboardWidget[];
   journalTemplates: JournalTemplate[];
+  categories: Category[];
   settings: AppSettings;
   pendingOperations: PendingOperation[];
   loadInitialData: () => Promise<void>;
@@ -115,12 +98,16 @@ type PracticeStore = {
   addGoal: (input: Omit<PracticeGoal, "id" | "createdAt"> & { id?: string }) => Promise<string>;
   updateGoal: (id: string, update: Partial<PracticeGoal>) => Promise<void>;
   removeGoal: (id: string) => Promise<void>;
-  addJournalEntry: (input: Omit<JournalEntry, "id" | "createdAt" | "updatedAt"> & { id?: string }) => Promise<string>;
+  addJournalEntry: (
+    input: Omit<JournalEntry, "id" | "createdAt" | "updatedAt"> & { id?: string }
+  ) => Promise<string>;
   updateJournalEntry: (id: string, update: Partial<JournalEntry>) => Promise<void>;
   removeJournalEntry: (id: string) => Promise<void>;
   setWidgets: (widgets: DashboardWidget[]) => Promise<void>;
   updateSettings: (update: Partial<AppSettings>) => Promise<void>;
   updateReminderRules: (rules: ReminderRule[]) => Promise<void>;
+  addCategory: (name: string) => Promise<string>;
+  removeCategory: (id: string) => Promise<void>;
   exportSnapshot: () => Promise<PracticeStateSnapshot>;
   importSnapshot: (snapshot: PracticeStateSnapshot) => Promise<void>;
 };
@@ -129,10 +116,7 @@ export const usePracticeStore = create<PracticeStore>()(
   devtools((set, get) => {
     const registerOperation = async (type: PendingOperationType, payload: unknown) => {
       const state = get();
-      if (!state.settings.sync.enableSync || !state.userId) {
-        return;
-      }
-
+      if (!state.settings.sync.enableSync || !state.userId) return;
       const operation: PendingOperation = {
         id: createId("op"),
         userId: state.userId,
@@ -155,38 +139,27 @@ export const usePracticeStore = create<PracticeStore>()(
       journalEntries: [],
       widgets: [],
       journalTemplates: [],
+      categories: [],
       settings: defaultSettings,
       pendingOperations: [],
       async loadInitialData() {
-        const [
-          tasks,
-          records,
-          goals,
-          journalEntries,
-          widgets,
-          templates,
-          settings,
-          operations
-        ] = await Promise.all([
-          db.tasks.orderBy("order").toArray(),
-          db.records.toArray(),
-          db.goals.toArray(),
-          db.journal.toArray(),
-          db.widgets.toArray(),
-          db.templates.toArray(),
-          db.settings.get(SETTINGS_ID),
-          db.operations.toArray()
-        ]);
+        const [tasks, records, goals, journalEntries, widgets, templates, settings, operations, categories] =
+          await Promise.all([
+            db.tasks.orderBy("order").toArray(),
+            db.records.toArray(),
+            db.goals.toArray(),
+            db.journal.toArray(),
+            db.widgets.toArray(),
+            db.templates.toArray(),
+            db.settings.get(SETTINGS_ID),
+            db.operations.toArray(),
+            db.categories.toArray()
+          ]);
 
         const shouldSeedTemplates = templates.length === 0;
-        if (shouldSeedTemplates) {
-          await db.templates.bulkPut(seededJournalTemplates);
-        }
-
+        if (shouldSeedTemplates) await db.templates.bulkPut(seededJournalTemplates);
         const persistedSettings = settings ?? defaultSettings;
-        if (!settings) {
-          await db.settings.put(persistedSettings);
-        }
+        if (!settings) await db.settings.put(persistedSettings);
 
         set({
           ready: true,
@@ -196,38 +169,31 @@ export const usePracticeStore = create<PracticeStore>()(
           journalEntries,
           widgets,
           journalTemplates: shouldSeedTemplates ? seededJournalTemplates : templates,
+          categories,
           settings: persistedSettings,
           pendingOperations: operations
         });
       },
       async setUser(userId, opts) {
-        if (!get().ready) {
-          await get().loadInitialData();
-        }
+        if (!get().ready) await get().loadInitialData();
         set({ userId });
-        if (!userId || !get().settings.sync.enableSync) {
-          return;
-        }
+        if (!userId || !get().settings.sync.enableSync) return;
         if (opts?.forceReload || !get().settings.sync.lastSyncedAt) {
           await get().syncNow({ push: false, pull: true });
         }
       },
       async syncNow(options) {
         const { userId, pendingOperations } = get();
-        if (!userId || !get().settings.sync.enableSync) {
-          return;
-        }
+        if (!userId || !get().settings.sync.enableSync) return;
 
         const config = { push: true, pull: true, ...options };
         set({ syncStatus: "syncing", syncError: undefined });
-
         try {
           if (config.push && pendingOperations.length > 0) {
             await pushPendingOperations(userId, pendingOperations);
             await db.operations.clear();
             set({ pendingOperations: [] });
           }
-
           if (config.pull) {
             const remote = await fetchRemoteSnapshot(userId);
             if (remote?.snapshot) {
@@ -243,27 +209,20 @@ export const usePracticeStore = create<PracticeStore>()(
 
           const timestamp = nowIso();
           const current = get().settings;
-          const nextSettings: AppSettings = {
-            ...current,
-            sync: { ...current.sync, lastSyncedAt: timestamp, lastError: undefined }
-          };
+          const nextSettings: AppSettings = { ...current, sync: { ...current.sync, lastSyncedAt: timestamp, lastError: undefined } };
           await db.settings.put(nextSettings);
           set({ settings: nextSettings, syncStatus: "idle" });
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           const current = get().settings;
-          const nextSettings: AppSettings = {
-            ...current,
-            sync: { ...current.sync, lastError: message }
-          };
+          const nextSettings: AppSettings = { ...current, sync: { ...current.sync, lastError: message } };
           await db.settings.put(nextSettings);
           set({ syncStatus: "error", syncError: message, settings: nextSettings });
         }
       },
       async addTask(input) {
         const id = input.id ?? createId("task");
-        const color =
-          input.color ?? DEFAULT_COLOR_PALETTE[Math.floor(Math.random() * DEFAULT_COLOR_PALETTE.length)];
+        const color = input.color ?? DEFAULT_COLOR_PALETTE[Math.floor(Math.random() * DEFAULT_COLOR_PALETTE.length)];
         const payload: PracticeTask = {
           order: get().tasks.length,
           allowReminder: true,
@@ -282,16 +241,11 @@ export const usePracticeStore = create<PracticeStore>()(
         await db.tasks.update(id, update);
         set({ tasks: get().tasks.map((task) => (task.id === id ? { ...task, ...update } : task)) });
         const task = get().tasks.find((item) => item.id === id);
-        if (task) {
-          await registerOperation("task.upsert", task);
-        }
+        if (task) await registerOperation("task.upsert", task);
       },
       async reorderTasks(ids) {
         const current = get().tasks;
-        const updated = ids.map((taskId, index) => ({
-          ...(current.find((t) => t.id === taskId) as PracticeTask),
-          order: index
-        }));
+        const updated = ids.map((taskId, index) => ({ ...(current.find((t) => t.id === taskId) as PracticeTask), order: index }));
         await db.tasks.bulkPut(updated);
         set({ tasks: updated });
         await registerOperation("task.upsert", updated);
@@ -311,22 +265,14 @@ export const usePracticeStore = create<PracticeStore>()(
       },
       async addDailyRecord(input) {
         const id = buildRecordKey(input.taskId, input.date);
-        const payload: DailyRecord = {
-          ...input,
-          id,
-          lastModified: nowIso()
-        };
+        const payload: DailyRecord = { ...input, id, lastModified: nowIso() };
         await db.records.put(payload);
         const filtered = get().records.filter((record) => record.taskId !== input.taskId || record.date !== input.date);
         set({ records: [...filtered, payload] });
         await registerOperation("record.upsert", payload);
       },
       async bulkUpsertDailyRecords(records) {
-        const stamped = records.map((record) => ({
-          ...record,
-          id: buildRecordKey(record.taskId, record.date),
-          lastModified: nowIso()
-        }));
+        const stamped = records.map((record) => ({ ...record, id: buildRecordKey(record.taskId, record.date), lastModified: nowIso() }));
         await db.records.bulkPut(stamped);
         const map = new Map<string, DailyRecord>();
         [...get().records, ...stamped].forEach((record) => map.set(buildRecordKey(record.taskId, record.date), record));
@@ -335,11 +281,7 @@ export const usePracticeStore = create<PracticeStore>()(
       },
       async addGoal(input) {
         const id = input.id ?? createId("goal");
-        const payload: PracticeGoal = {
-          ...input,
-          id,
-          createdAt: nowIso()
-        };
+        const payload: PracticeGoal = { ...input, id, createdAt: nowIso() };
         await db.goals.put(payload);
         set({ goals: [...get().goals, payload] });
         await registerOperation("goal.upsert", payload);
@@ -349,9 +291,7 @@ export const usePracticeStore = create<PracticeStore>()(
         await db.goals.update(id, update);
         set({ goals: get().goals.map((goal) => (goal.id === id ? { ...goal, ...update } : goal)) });
         const goal = get().goals.find((item) => item.id === id);
-        if (goal) {
-          await registerOperation("goal.upsert", goal);
-        }
+        if (goal) await registerOperation("goal.upsert", goal);
       },
       async removeGoal(id) {
         await db.goals.delete(id);
@@ -361,12 +301,7 @@ export const usePracticeStore = create<PracticeStore>()(
       async addJournalEntry(input) {
         const id = input.id ?? createId("journal");
         const now = nowIso();
-        const payload: JournalEntry = {
-          ...input,
-          id,
-          createdAt: now,
-          updatedAt: now
-        };
+        const payload: JournalEntry = { ...input, id, createdAt: now, updatedAt: now };
         await db.journal.put(payload);
         set({ journalEntries: [...get().journalEntries, payload] });
         await registerOperation("journal.upsert", payload);
@@ -374,14 +309,10 @@ export const usePracticeStore = create<PracticeStore>()(
       },
       async updateJournalEntry(id, update) {
         const existing = get().journalEntries.find((item) => item.id === id);
-        if (!existing) {
-          return;
-        }
+        if (!existing) return;
         const updatedEntry: JournalEntry = { ...existing, ...update, updatedAt: nowIso() };
         await db.journal.put(updatedEntry);
-        set({
-          journalEntries: get().journalEntries.map((entry) => (entry.id === id ? updatedEntry : entry))
-        });
+        set({ journalEntries: get().journalEntries.map((entry) => (entry.id === id ? updatedEntry : entry)) });
         await registerOperation("journal.upsert", updatedEntry);
       },
       async removeJournalEntry(id) {
@@ -414,14 +345,32 @@ export const usePracticeStore = create<PracticeStore>()(
       },
       async updateReminderRules(rules) {
         const current = get().settings;
-        const nextSettings: AppSettings = {
-          ...current,
-          reminder: { ...current.reminder, rules },
-          id: SETTINGS_ID
-        };
+        const nextSettings: AppSettings = { ...current, reminder: { ...current.reminder, rules }, id: SETTINGS_ID } as AppSettings;
         await db.settings.put(nextSettings);
         set({ settings: nextSettings });
         await registerOperation("settings.update", nextSettings);
+      },
+      async addCategory(name) {
+        const id = createId("cat");
+        const item: Category = { id, name, createdAt: nowIso() };
+        await db.categories.put(item);
+        set({ categories: [...get().categories, item] });
+        return id;
+      },
+      async removeCategory(id) {
+        const categories = get().categories.filter((c) => c.id !== id);
+        await db.categories.delete(id);
+        const removed = get().categories.find((c) => c.id === id);
+        if (removed) {
+          const affected = get().tasks
+            .filter((t) => t.category === removed.name)
+            .map((t) => ({ ...t, category: "" }));
+          if (affected.length) {
+            await db.tasks.bulkPut(affected as any);
+            set({ tasks: get().tasks.map((t) => (t.category === removed.name ? { ...t, category: "" } : t)) });
+          }
+        }
+        set({ categories });
       },
       async exportSnapshot() {
         const state: PracticeStateSnapshot = {
@@ -432,6 +381,7 @@ export const usePracticeStore = create<PracticeStore>()(
           widgets: await db.widgets.toArray(),
           journalTemplates: await db.templates.toArray(),
           settings: (await db.settings.get(SETTINGS_ID)) ?? defaultSettings,
+          categories: await db.categories.toArray(),
           version: 1
         };
         return state;
@@ -447,6 +397,7 @@ export const usePracticeStore = create<PracticeStore>()(
             db.widgets,
             db.templates,
             db.settings,
+            db.categories,
             async () => {
               await Promise.all([
                 db.tasks.clear(),
@@ -455,7 +406,8 @@ export const usePracticeStore = create<PracticeStore>()(
                 db.journal.clear(),
                 db.widgets.clear(),
                 db.templates.clear(),
-                db.settings.clear()
+                db.settings.clear(),
+                db.categories.clear()
               ]);
               await Promise.all([
                 db.tasks.bulkPut(snapshot.tasks),
@@ -464,7 +416,8 @@ export const usePracticeStore = create<PracticeStore>()(
                 db.journal.bulkPut(snapshot.journalEntries),
                 db.widgets.bulkPut(snapshot.widgets),
                 db.templates.bulkPut(snapshot.journalTemplates),
-                db.settings.put({ ...snapshot.settings, id: SETTINGS_ID })
+                db.settings.put({ ...snapshot.settings, id: SETTINGS_ID }),
+                db.categories.bulkPut(snapshot.categories ?? [])
               ]);
             }
           )
@@ -476,13 +429,11 @@ export const usePracticeStore = create<PracticeStore>()(
           journalEntries: snapshot.journalEntries,
           widgets: snapshot.widgets,
           journalTemplates: snapshot.journalTemplates,
-          settings: { ...snapshot.settings, id: SETTINGS_ID }
+          settings: { ...snapshot.settings, id: SETTINGS_ID },
+          categories: snapshot.categories ?? []
         });
       }
     };
   }, { name: "practice-store" })
 );
-
-
-
 

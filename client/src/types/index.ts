@@ -1,11 +1,11 @@
-﻿export type UUID = string;
+export type UUID = string;
 
 export type PracticeCategory = string;
 
 export type PracticeTask = {
   id: UUID;
   name: string;
-  category: PracticeCategory;
+  category: PracticeCategory;
   color: string;
   isActive: boolean;
   allowReminder: boolean;
@@ -131,6 +131,12 @@ export type JournalTemplate = {
   fields: JournalTemplateField[];
 };
 
+export type Category = {
+  id: UUID;
+  name: string;
+  createdAt: string;
+};
+
 export type PracticeStateSnapshot = {
   tasks: PracticeTask[];
   records: DailyRecord[];
@@ -139,6 +145,7 @@ export type PracticeStateSnapshot = {
   widgets: DashboardWidget[];
   journalTemplates: JournalTemplate[];
   settings: AppSettings;
+  categories: Category[];
   version: number;
 };
 

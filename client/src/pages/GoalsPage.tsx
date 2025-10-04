@@ -94,7 +94,7 @@ function GoalsPage() {
                       功課：{task?.name ?? "已刪除"}（{goal.startDate} ~ {goal.endDate}）
                     </p>
                     <p className="text-xs text-slate-400">
-                      目標 {goal.targetCount} {task?.unit ?? "次"}
+                      目標 {goal.targetCount} 次
                     </p>
                   </div>
                   <button
@@ -200,3 +200,4 @@ function GoalsPage() {
 }
 
 export default GoalsPage;
+

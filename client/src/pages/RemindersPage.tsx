@@ -2,6 +2,17 @@
 import { FiPlusCircle, FiBell, FiTrash2 } from "react-icons/fi";
 import clsx from "clsx";
 import { usePracticeStore } from "../store/practiceStore";
+import { supabase } from "../lib/supabaseClient";
+const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY as string;
+
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(base64);
+  const output = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; ++i) output[i] = raw.charCodeAt(i);
+  return output;
+}
 import type { ReminderRule } from "../types";
 
 const WEEKDAY_LABEL = ["日", "一", "二", "三", "四", "五", "六"];
@@ -46,6 +57,19 @@ function RemindersPage() {
     const granted = enabled ? await ensureNotificationPermission() : true;
     if (!granted) return;
     await updateSettings({ reminder: { ...reminder, enabled } });
+
+    if (enabled && "serviceWorker" in navigator && VAPID_PUBLIC_KEY && supabase) {
+      try {
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+        });
+        await supabase.functions.invoke("register-push", { body: { subscription: sub.toJSON() } });
+      } catch (e) {
+        console.error(e);
+      }
+    }
   }
 
   async function handleAddRule() {
@@ -93,6 +117,17 @@ function RemindersPage() {
         body: "這是測試通知，記得填寫今日功課喔！",
         icon: "/pwa-192x192.png"
       });
+    }
+  }
+
+  async function handleServerPushTest() {
+    try {
+      await supabase?.functions.invoke("send-push", {
+        body: { title: "Practice 提醒", body: "這是伺服器推播測試。" }
+      });
+    } catch (e) {
+      console.error(e);
+      alert("伺服器推播測試失敗，請確認已登入並註冊訂閱");
     }
   }
 
@@ -217,6 +252,13 @@ function RemindersPage() {
             onClick={handleTestNotification}
           >
             <FiBell /> 測試通知
+          </button>
+          <button
+            type="button"
+            className="inline-flex items-center gap-2 rounded-lg border border-primary px-3 py-2 text-sm font-semibold text-primary"
+            onClick={handleServerPushTest}
+          >
+            <FiBell /> 伺服器推播
           </button>
         </div>
       </section>

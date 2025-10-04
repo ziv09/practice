@@ -31,10 +31,28 @@ export function calculateGoalProgress(goal: PracticeGoal, records: DailyRecord[]
   const totalDays = end.diff(start, "day") + 1;
   const elapsedDays = Math.max(0, Math.min(totalDays, current.diff(start, "day") + 1));
   const completed = sumRecords(records, goal.taskId, goal.startDate, today);
+
+  // 加權模式：週末權重 weekendMultiplier，其餘為 1
+  let totalWeight = totalDays;
+  let elapsedWeight = elapsedDays;
+  if (goal.mode === "weighted") {
+    const wm = goal.weekendMultiplier ?? 2;
+    totalWeight = 0;
+    elapsedWeight = 0;
+    for (let i = 0; i < totalDays; i++) {
+      const d = start.add(i, "day");
+      const isWeekend = [0, 6].includes(d.day());
+      const w = isWeekend ? wm : 1;
+      totalWeight += w;
+      if (i < elapsedDays) elapsedWeight += w;
+    }
+  }
+
   const progress = Math.min(1, completed / goal.targetCount);
   const left = Math.max(0, goal.targetCount - completed);
-  const suggestedDaily = left / Math.max(1, totalDays - elapsedDays);
-  const expectedByToday = (goal.targetCount / totalDays) * elapsedDays;
+  const remainingWeight = Math.max(1, totalWeight - elapsedWeight);
+  const suggestedDaily = goal.mode === "weighted" ? left / remainingWeight : left / Math.max(1, totalDays - elapsedDays);
+  const expectedByToday = (goal.targetCount / totalWeight) * elapsedWeight;
   const isBehind = completed < expectedByToday * 0.95;
 
   return {

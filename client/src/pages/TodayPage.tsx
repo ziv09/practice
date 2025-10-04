@@ -14,7 +14,11 @@ function TodayPage() {
   const today = dayjs().format("YYYY-MM-DD");
   const yesterday = dayjs().subtract(1, "day").format("YYYY-MM-DD");
 
-  const todayTotal = useMemo(() => sumDaily(records, today), [records, today]);
+  const todayTotal = useMemo(() => {
+    const set = new Set<string>();
+    records.forEach((r) => { if (r.date === today && r.count > 0) set.add(r.taskId); });
+    return set.size;
+  }, [records, today]);
 
   const goalProgress = useMemo(
     () =>
@@ -174,4 +178,5 @@ function TodayPage() {
 }
 
 export default TodayPage;
+
 

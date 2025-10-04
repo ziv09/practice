@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -6,11 +6,12 @@ import { FiEdit2, FiArrowUp, FiArrowDown, FiCheck, FiX, FiTrash2 } from "react-i
 import clsx from "clsx";
 import { usePracticeStore } from "../store/practiceStore";
 import type { PracticeTask } from "../types";
+import Modal from "../components/Modal";
 
 const taskSchema = z.object({
-  name: z.string().min(1, "不可空白"),
-  category: z.string().min(1, "請輸入分類"),
-  color: z.string().regex(/^#/, "請輸入色碼"),
+  name: z.string().min(1, "請輸入名稱"),
+  category: z.string().optional().transform((v) => v ?? ""),
+  color: z.string().regex(/^#/, "請輸入顏色"),
   allowReminder: z.boolean(),
   includeInDashboard: z.boolean()
 });
@@ -23,10 +24,21 @@ function TasksPage() {
   const updateTask = usePracticeStore((state) => state.updateTask);
   const reorderTasks = usePracticeStore((state) => state.reorderTasks);
   const removeTask = usePracticeStore((state) => state.removeTask);
+  const categories = usePracticeStore((state) => state.categories);
+  const addCategoryToStore = usePracticeStore((state) => state.addCategory);
+  const removeCategoryFromStore = usePracticeStore((state) => state.removeCategory);
+
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<TaskFormValues | null>(null);
+  const [categoryModalOpen, setCategoryModalOpen] = useState(false);
+  const [newCategory, setNewCategory] = useState("");
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<TaskFormValues>({
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors }
+  } = useForm<TaskFormValues>({
     resolver: zodResolver(taskSchema),
     defaultValues: {
       name: "",
@@ -40,6 +52,7 @@ function TasksPage() {
   async function onSubmit(values: TaskFormValues) {
     await addTask({
       ...values,
+      category: values.category ?? "",
       order: tasks.length,
       isActive: true
     } as unknown as PracticeTask);
@@ -74,7 +87,7 @@ function TasksPage() {
   }
 
   async function handleDelete(task: PracticeTask) {
-    const ok = window.confirm(`確定要刪除「${task.name}」？此操作會一併刪除其相關紀錄與目標。`);
+    const ok = window.confirm(`確定要刪除「${task.name}」？此操作會一併刪除其紀錄與目標。`);
     if (!ok) return;
     await removeTask(task.id);
   }
@@ -87,6 +100,13 @@ function TasksPage() {
     const [item] = reordered.splice(currentIndex, 1);
     reordered.splice(targetIndex, 0, item);
     await reorderTasks(reordered.map((t) => t.id));
+  }
+
+  async function handleAddCategory() {
+    const name = newCategory.trim();
+    if (!name) return;
+    await addCategoryToStore(name);
+    setNewCategory("");
   }
 
   return (
@@ -103,8 +123,8 @@ function TasksPage() {
                   </h3>
                   <p className="text-sm text-slate-500">分類：{String(task.category || "未分類")}</p>
                   <p className="text-xs text-slate-400">
-                    {task.allowReminder ? "提醒已啟用" : "提醒未啟用"}／
-                    {task.includeInDashboard ? "儀表板顯示" : "儀表板隱藏"}
+                    {task.allowReminder ? "允許提醒" : "不提醒"}．
+                    {task.includeInDashboard ? "顯示於儀表板" : "不顯示於儀表板"}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -126,22 +146,22 @@ function TasksPage() {
                   </button>
                   <button
                     type="button"
-                    className="rounded-full border border-rose-200 p-2 text-rose-500 hover:border-rose-400"
-                    onClick={() => handleDelete(task)}
-                    aria-label="刪除"
+                    className={clsx(
+                      "rounded-full p-2",
+                      isEditing ? "border border-emerald-300 text-emerald-600" : "border border-slate-200 text-slate-500 hover:border-primary hover:text-primary"
+                    )}
+                    onClick={() => (isEditing ? handleSaveEdit(task) : handleEdit(task))}
+                    aria-label={isEditing ? "儲存" : "編輯"}
                   >
-                    <FiTrash2 />
+                    {isEditing ? <FiCheck /> : <FiEdit2 />}
                   </button>
                   <button
                     type="button"
-                    className={clsx(
-                      "rounded-full border border-slate-200 p-2",
-                      isEditing ? "border-primary text-primary" : "text-slate-500 hover:border-primary hover:text-primary"
-                    )}
-                    onClick={() => (isEditing ? handleCancelEdit() : handleEdit(task))}
-                    aria-label="編輯"
+                    className="rounded-full border border-rose-200 p-2 text-rose-500 hover:border-rose-400"
+                    onClick={() => (isEditing ? handleCancelEdit() : handleDelete(task))}
+                    aria-label={isEditing ? "取消" : "刪除"}
                   >
-                    <FiEdit2 />
+                    {isEditing ? <FiX /> : <FiTrash2 />}
                   </button>
                 </div>
               </header>
@@ -157,12 +177,27 @@ function TasksPage() {
                   </div>
                   <div>
                     <label className="block text-xs text-slate-500">分類</label>
-                    <input
-                      className="w-full rounded-lg border border-slate-200 px-3 py-2"
-                      value={editValues.category}
-                      onChange={(event) => setEditValues({ ...editValues, category: event.target.value })}
-                      placeholder="例如：持咒、抄經、禪修..."
-                    />
+                    <div className="flex gap-2">
+                      <select
+                        className="w-full rounded-lg border border-slate-200 px-3 py-2"
+                        value={editValues.category}
+                        onChange={(event) => setEditValues({ ...editValues, category: event.target.value })}
+                      >
+                        <option value="">未分類</option>
+                        {categories.map((c) => (
+                          <option key={c.id} value={c.name}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        className="whitespace-nowrap rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600"
+                        onClick={() => setCategoryModalOpen(true)}
+                      >
+                        管理分類
+                      </button>
+                    </div>
                   </div>
                   <div>
                     <label className="block text-xs text-slate-500">顏色</label>
@@ -179,7 +214,7 @@ function TasksPage() {
                       checked={editValues.allowReminder}
                       onChange={(event) => setEditValues({ ...editValues, allowReminder: event.target.checked })}
                     />
-                    啟用提醒
+                    允許提醒
                   </label>
                   <label className="flex items-center gap-2 text-sm">
                     <input
@@ -189,22 +224,6 @@ function TasksPage() {
                     />
                     顯示在儀表板
                   </label>
-                  <div className="col-span-full flex justify-end gap-2">
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600"
-                      onClick={handleCancelEdit}
-                    >
-                      <FiX /> 取消
-                    </button>
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white"
-                      onClick={() => handleSaveEdit(task)}
-                    >
-                      <FiCheck /> 儲存
-                    </button>
-                  </div>
                 </div>
               )}
             </article>
@@ -221,7 +240,23 @@ function TasksPage() {
           </div>
           <div>
             <label className="block text-xs text-slate-500">分類</label>
-            <input className="w-full rounded-lg border border-slate-200 px-3 py-2" {...register("category")} placeholder="例如：持咒、抄經、禪修..." />
+            <div className="flex gap-2">
+              <select className="w-full rounded-lg border border-slate-200 px-3 py-2" {...register("category")}> 
+                <option value="">未分類</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.name}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="whitespace-nowrap rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600"
+                onClick={() => setCategoryModalOpen(true)}
+              >
+                管理分類
+              </button>
+            </div>
             {errors.category && <p className="mt-1 text-xs text-rose-500">{errors.category.message}</p>}
           </div>
           <div>
@@ -229,10 +264,10 @@ function TasksPage() {
             <input type="color" className="h-10 w-full cursor-pointer rounded-lg border border-slate-200" {...register("color")} />
           </div>
           <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" {...register("allowReminder")} defaultChecked /> 啟用提醒
+            <input type="checkbox" {...register("allowReminder")} defaultChecked /> 允許提醒
           </label>
           <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" {...register("includeInDashboard")} defaultChecked /> 顯示在儀表板
+            <input type="checkbox" {...register("includeInDashboard")} defaultChecked /> 顯示於儀表板
           </label>
           <button
             type="submit"
@@ -242,8 +277,48 @@ function TasksPage() {
           </button>
         </form>
       </aside>
+
+      <Modal open={categoryModalOpen} onClose={() => setCategoryModalOpen(false)} title="管理分類" widthClass="max-w-lg">
+        <div className="space-y-3">
+          <div className="flex gap-2">
+            <input
+              className="w-full rounded-lg border border-slate-200 px-3 py-2"
+              placeholder="輸入分類名稱"
+              value={newCategory}
+              onChange={(e) => setNewCategory(e.target.value)}
+            />
+            <button
+              type="button"
+              className="rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white"
+              onClick={handleAddCategory}
+            >
+              新增
+            </button>
+          </div>
+          <ul className="space-y-2">
+            {categories.map((c) => (
+              <li key={c.id} className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2">
+                <span>{c.name}</span>
+                <button
+                  type="button"
+                  className="rounded-full border border-rose-200 p-2 text-rose-500 hover:border-rose-400"
+                  onClick={() => removeCategoryFromStore(c.id)}
+                >
+                  <FiTrash2 />
+                </button>
+              </li>
+            ))}
+            {categories.length === 0 && (
+              <li className="rounded-lg border border-dashed border-slate-200 px-3 py-2 text-sm text-slate-500">
+                尚無分類，請先新增
+              </li>
+            )}
+          </ul>
+        </div>
+      </Modal>
     </div>
   );
 }
 
 export default TasksPage;
+
