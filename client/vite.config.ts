@@ -9,9 +9,9 @@ export default defineConfig({
       registerType: "autoUpdate",
       includeAssets: ["favicon.ico", "apple-touch-icon.png"],
       manifest: {
-        name: "Practice Daily Dharma",
+        name: "Practice",
         short_name: "Practice",
-        description: "記錄每日佛修功課、目標與心得的進階 PWA。",
+        description: "記錄每日功課、目標與心得的進階 PWA。",
         theme_color: "#1f2937",
         background_color: "#f9fafb",
         display: "standalone",
@@ -39,7 +39,7 @@ export default defineConfig({
         globPatterns: ["**/*.{js,css,html,ico,png,svg,json}"]
       },
       devOptions: {
-        enabled: true
+        enabled: false
       }
     })
   ],
@@ -47,3 +47,4 @@ export default defineConfig({
     port: 5173
   }
 });
+

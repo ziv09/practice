@@ -9,13 +9,16 @@ import DashboardPage from "./pages/DashboardPage";
 import JournalPage from "./pages/JournalPage";
 import SettingsPage from "./pages/SettingsPage";
 import RemindersPage from "./pages/RemindersPage";
+import RecordsPage from "./pages/RecordsPage";
 import AuthCallbackPage from "./pages/AuthCallbackPage";
-import LoginPage from "./pages/LoginPage";
+import LoginPage from "./pages/_LoginPage";
 import { supabase } from "./lib/supabaseClient";
 import { usePracticeStore } from "./store/practiceStore";
+import { useAutoSyncLifecycle } from "./hooks/useAutoSyncLifecycle";
 
 function App() {
   const setUser = usePracticeStore((s) => s.setUser);
+  useAutoSyncLifecycle();
   useEffect(() => {
     (async () => {
       if (!supabase) return;
@@ -36,6 +39,7 @@ function App() {
         <Route element={<MainLayout />}>
           <Route index element={<Navigate to="/today" replace />} />
           <Route path="/today" element={<TodayPage />} />
+          <Route path="/records" element={<RecordsPage />} />
           <Route path="/tasks" element={<TasksPage />} />
           <Route path="/goals" element={<GoalsPage />} />
           <Route path="/dashboard" element={<DashboardPage />} />
@@ -51,4 +55,3 @@ function App() {
 }
 
 export default App;
-

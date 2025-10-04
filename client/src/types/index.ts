@@ -177,3 +177,26 @@ export type RemoteSnapshot = {
   updatedAt: string;
 };
 
+// Sheet sync types
+export type SheetConfig = {
+  id: UUID;
+  title: string;
+  spreadsheetId: string;
+  folderId?: string;
+  taskIds: UUID[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type SheetOperationType =
+  | "task.upsert"
+  | "task.delete"
+  | "record.upsert"
+  | "record.delete";
+
+export type SheetOperation = {
+  id: UUID;
+  type: SheetOperationType;
+  payload: unknown;
+  createdAt: string;
+};

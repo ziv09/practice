@@ -1,224 +1,4 @@
-import Dexie from "dexie";
-import { create } from "zustand";
-import { nanoid } from "nanoid";
-import { devtools } from "zustand/middleware";
-import { db } from "../lib/db";
-import type {
-  AppSettings,
-  DailyRecord,
-  DashboardWidget,
-  JournalEntry,
-  JournalTemplate,
-  PendingOperation,
-  PendingOperationType,
-  PracticeGoal,
-  PracticeTask,
-  PracticeStateSnapshot,
-  ReminderRule,
-  SyncStatus,
-  Category
-} from "../types";
-import { buildRecordKey } from "../utils/practice";
-import type { SheetOperationType } from "../types";
-import { fetchRemoteSnapshot, pushPendingOperations, upsertRemoteSnapshot } from "../services/supabaseSync";
-import { supabase } from "../lib/supabaseClient";
-
-const DEFAULT_COLOR_PALETTE = ["#0284c7", "#ca8a04", "#22c55e", "#a855f7", "#fb7185", "#f97316"];
-const SETTINGS_ID = "app-settings";
-
-const defaultSettings: AppSettings = {
-  id: SETTINGS_ID,
-  appearance: { theme: "auto", accentColor: "#a855f7", cardStyle: "comfortable", fontScale: 1 },
-  reminder: {
-    enabled: false,
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    rules: [],
-    pushEndpoint: undefined,
-    lastNotificationDate: undefined
-  },
-  sync: {
-    enableSync: true,
-    includeJournal: false,
-    range: "90d",
-    strategy: "single-sheet",
-    template: "Practice-{date}",
-    lastError: undefined,
-    lastSyncedAt: undefined
-  },
-  onboardingCompleted: false
-};
-
-const seededJournalTemplates: JournalTemplate[] = [
-  {
-    id: "template-default",
-    name: "預設",
-    description: "記錄感恩、洞見與提醒",
-    fields: [
-      { id: "gratitude", label: "感恩", placeholder: "感謝的人事物", required: false },
-      { id: "insight", label: "洞見", placeholder: "今日所學或發現", required: true },
-      { id: "reminder", label: "提醒", placeholder: "給明天的提示", required: false }
-    ]
-  }
-];
-
-function createId(prefix: string) {
-  try {
-    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-      return `${prefix}-${crypto.randomUUID()}`;
-    }
-  } catch {}
-  return `${prefix}-${nanoid()}`;
-}
-
-function nowIso() {
-  return new Date().toISOString();
-}
-
-type PracticeStore = {
-  ready: boolean;
-  userId: string | null;
-  syncStatus: SyncStatus;
-  syncError?: string;
-  tasks: PracticeTask[];
-  records: DailyRecord[];
-  goals: PracticeGoal[];
-  journalEntries: JournalEntry[];
-  widgets: DashboardWidget[];
-  journalTemplates: JournalTemplate[];
-  categories: Category[];
-  settings: AppSettings;
-  pendingOperations: PendingOperation[];
-  loadInitialData: () => Promise<void>;
-  setUser: (userId: string | null, opts?: { forceReload?: boolean }) => Promise<void>;
-  syncNow: (options?: { push?: boolean; pull?: boolean }) => Promise<void>;
-  addTask: (input: Omit<PracticeTask, "id"> & { id?: string }) => Promise<string>;
-  updateTask: (id: string, update: Partial<PracticeTask>) => Promise<void>;
-  reorderTasks: (ids: string[]) => Promise<void>;
-  removeTask: (id: string) => Promise<void>;
-  addDailyRecord: (input: Omit<DailyRecord, "id" | "lastModified">) => Promise<void>;
-  removeDailyRecord: (taskId: string, date: string) => Promise<void>;
-  bulkUpsertDailyRecords: (records: Omit<DailyRecord, "lastModified">[]) => Promise<void>;
-  addGoal: (input: Omit<PracticeGoal, "id" | "createdAt"> & { id?: string }) => Promise<string>;
-  updateGoal: (id: string, update: Partial<PracticeGoal>) => Promise<void>;
-  removeGoal: (id: string) => Promise<void>;
-  addJournalEntry: (
-    input: Omit<JournalEntry, "id" | "createdAt" | "updatedAt"> & { id?: string }
-  ) => Promise<string>;
-  updateJournalEntry: (id: string, update: Partial<JournalEntry>) => Promise<void>;
-  removeJournalEntry: (id: string) => Promise<void>;
-  setWidgets: (widgets: DashboardWidget[]) => Promise<void>;
-  updateSettings: (update: Partial<AppSettings>) => Promise<void>;
-  updateReminderRules: (rules: ReminderRule[]) => Promise<void>;
-  addCategory: (name: string) => Promise<string>;
-  removeCategory: (id: string) => Promise<void>;
-  exportSnapshot: () => Promise<PracticeStateSnapshot>;
-  importSnapshot: (snapshot: PracticeStateSnapshot) => Promise<void>;
-};
-
-export const usePracticeStore = create<PracticeStore>()(
-  devtools((set, get) => {
-    let syncTimer: number | undefined;
-    let sheetTimer: number | undefined;
-    const scheduleBackgroundSync = () => {
-      // debounce 1.5s
-      if (typeof window !== "undefined") {
-        if (syncTimer) window.clearTimeout(syncTimer);
-        syncTimer = window.setTimeout(() => {
-          void get().syncNow({ push: true, pull: false });
-        }, 1500);
-      }
-    };
-
-    const scheduleSheetSync = () => {
-      if (typeof window !== "undefined") {
-        if (sheetTimer) window.clearTimeout(sheetTimer);
-        sheetTimer = window.setTimeout(() => {
-          window.dispatchEvent(new Event("sheet-sync-request"));
-        }, 1200);
-      }
-    };
-
-    const registerOperation = async (type: PendingOperationType, payload: unknown) => {
-      const state = get();
-      if (!state.userId) return;
-      const operation: PendingOperation = {
-        id: createId("op"),
-        userId: state.userId,
-        type,
-        payload,
-        createdAt: nowIso()
-      };
-      await db.operations.put(operation);
-      set({ pendingOperations: [...state.pendingOperations, operation] });
-      scheduleBackgroundSync();
-    };
-
-    const registerSheetOperation = async (type: SheetOperationType, payload: unknown) => {
-      const op = {
-        id: createId("shop"),
-        type,
-        payload,
-        createdAt: nowIso()
-      };
-      await db.sheetOps.put(op as any);
-      scheduleSheetSync();
-    };
-
-    return {
-      ready: false,
-      userId: null,
-      syncStatus: "idle",
-      syncError: undefined,
-      tasks: [],
-      records: [],
-      goals: [],
-      journalEntries: [],
-      widgets: [],
-      journalTemplates: [],
-      categories: [],
-      settings: defaultSettings,
-      pendingOperations: [],
-      async loadInitialData() {
-        const [tasks, records, goals, journalEntries, widgets, templates, settings, operations, categories] =
-          await Promise.all([
-            db.tasks.orderBy("order").toArray(),
-            db.records.toArray(),
-            db.goals.toArray(),
-            db.journal.toArray(),
-            db.widgets.toArray(),
-            db.templates.toArray(),
-            db.settings.get(SETTINGS_ID),
-            db.operations.toArray(),
-            db.categories.toArray()
-          ]);
-
-        const shouldSeedTemplates = templates.length === 0;
-        if (shouldSeedTemplates) await db.templates.bulkPut(seededJournalTemplates);
-        const persistedSettings = settings ?? defaultSettings;
-        if (!settings) await db.settings.put(persistedSettings);
-
-        set({
-          ready: true,
-          tasks,
-          records,
-          goals,
-          journalEntries,
-          widgets,
-          journalTemplates: shouldSeedTemplates ? seededJournalTemplates : templates,
-          categories,
-          settings: persistedSettings,
-          pendingOperations: operations
-        });
-      },
-      async setUser(userId, opts) {
-        if (!get().ready) await get().loadInitialData();
-        set({ userId });
-        if (!userId) return;
-        if (opts?.forceReload || !get().settings.sync.lastSyncedAt) {
-          await get().syncNow({ push: false, pull: true });
-        }
-      },
-      async syncNow(options) {
+﻿async syncNow(options) {
         const { userId, pendingOperations } = get();
         if (!userId) return;
 
@@ -235,36 +15,25 @@ export const usePracticeStore = create<PracticeStore>()(
             if (remote?.snapshot) {
               await get().importSnapshot(remote.snapshot);
             } else {
-              if (supabase) {
-                const localSnapshot = await get().exportSnapshot();
-                await upsertRemoteSnapshot(userId, localSnapshot);
-              }
-            }
-          } else if (config.push) {
-            if (supabase) {
               const localSnapshot = await get().exportSnapshot();
               await upsertRemoteSnapshot(userId, localSnapshot);
             }
+          } else if (config.push) {
+            const localSnapshot = await get().exportSnapshot();
+            await upsertRemoteSnapshot(userId, localSnapshot);
           }
 
-          if (supabase) {
-            const timestamp = nowIso();
-            const current = get().settings;
-            const nextSettings: AppSettings = { ...current, sync: { ...current.sync, lastSyncedAt: timestamp, lastError: undefined } };
-            await db.settings.put(nextSettings);
-            set({ settings: nextSettings, syncStatus: "idle" });
-          } else {
-            set({ syncStatus: "idle" });
-          }
+          const timestamp = nowIso();
+          const current = get().settings;
+          const nextSettings: AppSettings = { ...current, sync: { ...current.sync, lastSyncedAt: timestamp, lastError: undefined } };
+          await db.settings.put(nextSettings);
+          set({ settings: nextSettings, syncStatus: "idle" });
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           const current = get().settings;
           const nextSettings: AppSettings = { ...current, sync: { ...current.sync, lastError: message } };
           await db.settings.put(nextSettings);
           set({ syncStatus: "error", syncError: message, settings: nextSettings });
-          if (typeof window !== "undefined") {
-            window.dispatchEvent(new CustomEvent("app-toast", { detail: { type: "error", message: `同步失敗：${message}` } }));
-          }
         }
       },
       async addTask(input) {

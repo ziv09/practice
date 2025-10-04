@@ -1,6 +1,14 @@
-﻿client/node_modules/
+node_modules/
+client/node_modules/
 client/dist/
-client/.vite/
-client/temp_write.py
+client/dev-dist/
+.DS_Store
+*.log
+
+# Env files
+.env*
 client/.env*
-client/coverage/
+supabase/.env*
+
+# Vite cache
+client/.vite/

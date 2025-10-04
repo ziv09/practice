@@ -1,6 +1,6 @@
 ﻿import { useMemo } from "react";
 import dayjs from "dayjs";
-import { FiPlus, FiMinus, FiRefreshCw, FiEdit3 } from "react-icons/fi";
+import { FiPlus, FiMinus, FiRefreshCw, FiEdit3, FiTrash2 } from "react-icons/fi";
 import { usePracticeStore } from "../store/practiceStore";
 import { calculateGoalProgress, getRecordForDate, sumDaily } from "../utils/practice";
 
@@ -9,6 +9,7 @@ function TodayPage() {
   const records = usePracticeStore((state) => state.records);
   const goals = usePracticeStore((state) => state.goals);
   const addDailyRecord = usePracticeStore((state) => state.addDailyRecord);
+  const removeDailyRecord = usePracticeStore((state) => state.removeDailyRecord);
   const bulkUpsertDailyRecords = usePracticeStore((state) => state.bulkUpsertDailyRecords);
 
   const today = dayjs().format("YYYY-MM-DD");
@@ -54,6 +55,14 @@ function TodayPage() {
     const note = window.prompt("輸入今日心得（可留空移除）", current?.note ?? "");
     if (note === null) return;
     await addDailyRecord({ taskId, date: today, count: current?.count ?? 0, note: note || undefined });
+  }
+
+  async function handleDeleteRecord(taskId: string) {
+    const current = getRecordForDate(records, taskId, today);
+    if (!current) return;
+    const ok = window.confirm("確定要刪除此功課今日的紀錄嗎？");
+    if (!ok) return;
+    await removeDailyRecord(taskId, today);
   }
 
   async function handleCopyYesterday() {
@@ -142,6 +151,15 @@ function TodayPage() {
                   >
                     <FiEdit3 className="h-4 w-4" /> 記事
                   </button>
+                  {record && (
+                    <button
+                      type="button"
+                      className="ml-2 inline-flex items-center gap-2 rounded-lg border border-rose-200 px-3 py-2 text-sm text-rose-600 transition hover:border-rose-400"
+                      onClick={() => handleDeleteRecord(task.id)}
+                    >
+                      <FiTrash2 className="h-4 w-4" /> 刪除今日
+                    </button>
+                  )}
                 </div>
               </article>
             );
@@ -178,5 +196,6 @@ function TodayPage() {
 }
 
 export default TodayPage;
+
 
 

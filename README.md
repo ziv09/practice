@@ -1,6 +1,6 @@
 ﻿# Practice PWA
 
-一個針對佛修功課設計的 PWA Web App，提供每日功課紀錄、目標追蹤、視覺化面板、心得記事、提醒與雲端同步能力。前端支援離線使用與 IndexedDB 快取，並預留與 Supabase (PostgreSQL) 的遠端同步管線。
+一個針對功課管理設計的 PWA Web App，提供每日功課紀錄、目標追蹤、視覺化面板、心得記事、提醒與雲端同步能力。前端支援離線使用與 IndexedDB 快取，並預留與 Supabase (PostgreSQL) 的遠端同步管線。
 
 ## 主要特色
 

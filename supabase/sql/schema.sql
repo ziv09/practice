@@ -30,3 +30,25 @@ create policy if not exists "push_upsert_own" on public.user_push_subscriptions
 create policy if not exists "push_update_own" on public.user_push_subscriptions
   for update using (auth.uid() = user_id);
 
+-- User sheets management
+create table if not exists public.user_sheets (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  spreadsheet_id text not null,
+  folder_id text,
+  title text not null,
+  task_ids text[] not null default '{}',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.user_sheets enable row level security;
+
+create policy if not exists "sheets_select_own" on public.user_sheets
+  for select using (auth.uid() = user_id);
+create policy if not exists "sheets_insert_own" on public.user_sheets
+  for insert with check (auth.uid() = user_id);
+create policy if not exists "sheets_update_own" on public.user_sheets
+  for update using (auth.uid() = user_id);
+create policy if not exists "sheets_delete_own" on public.user_sheets
+  for delete using (auth.uid() = user_id);

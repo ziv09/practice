@@ -36,7 +36,7 @@ function SidebarNav({ items }: SidebarNavProps) {
       >
         <div className="mb-8 px-2">
           <span className="text-lg font-semibold text-primary">Practice</span>
-          <p className="text-xs text-slate-500">每日佛修記錄</p>
+          <p className="text-xs text-slate-500">每日記錄</p>
         </div>
         <ul className="flex-1 space-y-2">
           {items.map((item) => {
