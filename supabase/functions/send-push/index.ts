@@ -9,7 +9,16 @@ const VAPID_PRIVATE_KEY = Deno.env.get("VAPID_PRIVATE_KEY")!;
 
 webpush.setVapidDetails("mailto:admin@example.com", VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS"
+};
+
 serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
   try {
     const auth = req.headers.get("Authorization") ?? "";
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -27,12 +36,12 @@ serve(async (req) => {
     if (selErr) throw selErr;
     if (!subRow?.subscription) return new Response("no subscription", { status: 400 });
 
-    const { title = "Practice 提醒", body = "這是伺服器推播測試。" } = await req.json().catch(() => ({}));
+    const { title = "Practice 提醒", body = "這是伺服器推播測試" } = await req.json().catch(() => ({}));
     await webpush.sendNotification(subRow.subscription, JSON.stringify({ title, body }));
 
-    return new Response(JSON.stringify({ success: true }), { headers: { "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
-    return new Response(JSON.stringify({ success: false, message: String(e) }), { status: 500 });
+    return new Response(JSON.stringify({ success: false, message: String(e) }), { status: 500, headers: corsHeaders });
   }
 });
 

@@ -65,12 +65,43 @@ async function ensureMonthSheet(accessToken: string, spreadsheetId: string, mont
   const meta = await getSpreadsheet(accessToken, spreadsheetId);
   const has = (meta.sheets ?? []).some((s: any) => s.properties?.title === monthTitle);
   if (!has) await addSheet(accessToken, spreadsheetId, monthTitle);
-  const header = ["項目", ...Array.from({ length: days }, (_, i) => String(i + 1)), "taskId(hidden)"];
+  const header = ["Item", ...Array.from({ length: days }, (_, i) => String(i + 1)), "taskId(hidden)"];
   const endCol = colIndexToLetter(header.length);
   await valuesUpdate(accessToken, spreadsheetId, `${monthTitle}!A1:${endCol}1`, [header]);
 }
 
+
+async function deleteRow(accessToken: string, spreadsheetId: string, sheetTitle: string, rowNumber: number) {
+  const meta = await getSpreadsheet(accessToken, spreadsheetId);
+  const sheet = (meta.sheets ?? []).find((s: any) => s.properties?.title === sheetTitle);
+  if (!sheet) return;
+  const sheetId = sheet.properties.sheetId as number;
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`;
+  const body = {
+    requests: [
+      {
+        deleteDimension: {
+          range: { sheetId, dimension: "ROWS", startIndex: rowNumber - 1, endIndex: rowNumber }
+        }
+      }
+    ]
+  };
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  if (!resp.ok) throw new Error(`delete row failed: ${resp.status}`);
+}const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS"
+};
+
 serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
   try {
     const { accessToken, spreadsheetId, taskIds = [], operations = [] } = (await req.json()) as {
       accessToken?: string;
@@ -150,12 +181,28 @@ serve(async (req) => {
       }
     }
 
-    // handle task deletion: best-effort - not implemented for all months to limit API cost
-    // could be expanded to scan months if needed.
-
-    return new Response(JSON.stringify({ success: true }), { headers: { "Content-Type": "application/json" } });
+    // Handle task deletion for current month only (per requirement)
+    const taskDeletes = operations.filter((o) => o.type === "task.delete");
+    if (taskDeletes.length) {
+      const todayIso = new Date().toISOString();
+      const monthTitle = getMonthTitleFromDate(todayIso);
+      const days = monthDaysFromDate(todayIso);
+      const endCol = colIndexToLetter(days + 2);
+      const hiddenIndex = days + 1; // zero-based index within fetched rows
+      const rows = await valuesGet(accessToken, spreadsheetId, `${monthTitle}!A2:${endCol}1000`);
+      for (const op of taskDeletes) {
+        const tid = op?.payload?.id as string | undefined;
+        if (!tid) continue;
+        let rowNumber: number | undefined;
+        rows.forEach((row, i) => { if (row[hiddenIndex] === tid) rowNumber = i + 2; });
+        if (rowNumber) {
+          try { await deleteRow(accessToken, spreadsheetId, monthTitle, rowNumber); } catch (_) { /* ignore */ }
+        }
+      }
+    }
+    return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
-    return new Response(JSON.stringify({ success: false, message: String(e) }), { status: 500 });
+    return new Response(JSON.stringify({ success: false, message: String(e) }), { status: 500, headers: corsHeaders });
   }
 });
 

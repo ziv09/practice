@@ -15,7 +15,7 @@ export async function fetchRemoteSnapshot(userId: string) {
     .maybeSingle();
 
   if (error) {
-    console.error("取得遠端快照失敗", error);
+    console.error("讀取雲端快照失敗", error);
     throw new Error(error.message);
   }
 
@@ -38,7 +38,7 @@ export async function upsertRemoteSnapshot(userId: string, snapshot: PracticeSta
     { onConflict: "user_id" }
   );
   if (error) {
-    console.error("上傳遠端快照失敗", error);
+    console.error("上傳雲端快照失敗", error);
     throw new Error(error.message);
   }
 }
@@ -47,8 +47,8 @@ function sleep(ms: number) {
   return new Promise((res) => setTimeout(res, ms));
 }
 
-export async function pushPendingOperations(userId: string, operations: PendingOperation[]) {
-  if (!supabase) return { success: false, message: "Supabase 尚未初始化" } as any;
+export async function pushPendingOperations(userId: string, operations: PendingOperation[]): Promise<void> {
+  if (!supabase) return;
   const chunkSize = 200;
   const chunks: PendingOperation[][] = [];
   for (let i = 0; i < operations.length; i += chunkSize) {
@@ -56,17 +56,17 @@ export async function pushPendingOperations(userId: string, operations: PendingO
   }
   for (const chunk of chunks) {
     let attempt = 0;
-    while (true) {
+    // 重試：指數退避
+    for (;;) {
       const { error } = await supabase.functions.invoke(SYNC_FUNCTION, { body: { userId, operations: chunk } });
       if (!error) break;
       attempt += 1;
       if (attempt >= 3) {
-        console.error("傳送同步作業失敗", error);
+        console.error("推送同步作業失敗", error);
         throw new Error(error.message);
       }
       await sleep(1000 * Math.pow(2, attempt - 1));
     }
   }
-  return { success: true } as any;
+  return;
 }
-

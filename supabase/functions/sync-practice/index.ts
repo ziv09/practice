@@ -12,7 +12,16 @@ type PendingOperation = {
   createdAt: string;
 };
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS"
+};
+
 serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
   try {
     const auth = req.headers.get("Authorization") ?? "";
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -120,9 +129,8 @@ serve(async (req) => {
     );
     if (upErr) throw upErr;
 
-    return new Response(JSON.stringify({ success: true }), { headers: { "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
-    return new Response(JSON.stringify({ success: false, message: String(e) }), { status: 500 });
+    return new Response(JSON.stringify({ success: false, message: String(e) }), { status: 500, headers: corsHeaders });
   }
 });
-

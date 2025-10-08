@@ -70,9 +70,12 @@ async function flushSheetOps() {
   try {
     if (!navigator.onLine || !supabase) return;
     const token = await getGoogleAccessToken();
-    if (!token) return;
     const sheets = await fetchUserSheets();
     if (!sheets.length) return;
+    if (!token) {
+      console.warn("Skip sheet sync: missing Google access token");
+      return;
+    }
     const ops = await db.sheetOps.toArray();
     if (!ops.length) return;
 

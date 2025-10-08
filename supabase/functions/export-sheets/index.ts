@@ -13,7 +13,6 @@ async function createSpreadsheet(accessToken: string, title: string) {
 }
 
 async function moveFileToFolder(accessToken: string, fileId: string, folderId: string) {
-  // get current parents
   const metaResp = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?fields=parents`, {
     headers: { Authorization: `Bearer ${accessToken}` }
   });
@@ -23,11 +22,21 @@ async function moveFileToFolder(accessToken: string, fileId: string, folderId: s
   const url = new URL(`https://www.googleapis.com/drive/v3/files/${fileId}`);
   url.searchParams.set("addParents", folderId);
   if (prevParents) url.searchParams.set("removeParents", prevParents);
-  const resp = await fetch(url.toString(), {
-    method: "PATCH",
-    headers: { Authorization: `Bearer ${accessToken}` }
-  });
+  const resp = await fetch(url.toString(), { method: "PATCH", headers: { Authorization: `Bearer ${accessToken}` } });
   if (!resp.ok) throw new Error(`move file failed: ${resp.status}`);
+}
+
+async function findSpreadsheetByTitle(accessToken: string, title: string) {
+  const url = new URL("https://www.googleapis.com/drive/v3/files");
+  const q = `name = '${title.replace(/'/g, "\\'")}' and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false`;
+  url.searchParams.set("q", q);
+  url.searchParams.set("fields", "files(id,name)");
+  url.searchParams.set("pageSize", "10");
+  const resp = await fetch(url.toString(), { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!resp.ok) throw new Error(`drive search failed: ${resp.status}`);
+  const json = await resp.json();
+  const files = (json.files ?? []) as Array<{ id: string; name: string }>;
+  return files.length ? files[0].id : undefined;
 }
 
 async function valuesUpdate(accessToken: string, spreadsheetId: string, range: string, values: any[][]) {
@@ -41,7 +50,7 @@ async function valuesUpdate(accessToken: string, spreadsheetId: string, range: s
 }
 
 async function getSpreadsheet(accessToken: string, spreadsheetId: string) {
-  const resp = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}` , {
+  const resp = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`, {
     headers: { Authorization: `Bearer ${accessToken}` }
   });
   if (!resp.ok) throw new Error(`get spreadsheet failed: ${resp.status}`);
@@ -79,7 +88,16 @@ function monthDays(date = new Date()) {
   return new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
 }
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS"
+};
+
 serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
   try {
     const { accessToken, template = "Practice-{date}", spreadsheetId: existingId, folderId, taskIds = [] } = (await req.json()) as {
       accessToken?: string;
@@ -88,14 +106,23 @@ serve(async (req) => {
       folderId?: string;
       taskIds?: string[];
     };
-    if (!accessToken) return new Response(JSON.stringify({ success: false, message: "missing accessToken" }), { status: 400 });
+    if (!accessToken)
+      return new Response(JSON.stringify({ success: false, message: "missing accessToken" }), { status: 400, headers: { "Content-Type": "application/json" } });
+    if (!taskIds || taskIds.length === 0)
+      return new Response(JSON.stringify({ success: false, message: "missing taskIds" }), { status: 400, headers: { "Content-Type": "application/json" } });
 
     const date = new Date().toISOString().slice(0, 10);
     const title = template.replace("{date}", date);
-    let spreadsheetId = existingId ?? (await createSpreadsheet(accessToken, title));
+    let spreadsheetId = existingId;
+    if (!spreadsheetId) {
+      spreadsheetId = await findSpreadsheetByTitle(accessToken, title);
+    }
+    if (!spreadsheetId) {
+      spreadsheetId = await createSpreadsheet(accessToken, title);
+    }
 
     if (!existingId && folderId) {
-      await moveFileToFolder(accessToken, spreadsheetId, folderId);
+      try { await moveFileToFolder(accessToken, spreadsheetId, folderId); } catch (_) { /* ignore */ }
     }
 
     // Ensure current month sheet exists with header row
@@ -106,14 +133,13 @@ serve(async (req) => {
       await addSheet(accessToken, spreadsheetId, monthTitle);
     }
     const days = monthDays(new Date());
-    const header = ["項目", ...Array.from({ length: days }, (_, i) => String(i + 1)), "taskId(hidden)"];
+    const header = ["Item", ...Array.from({ length: days }, (_, i) => String(i + 1)), "taskId(hidden)"];
     const endCol = colIndexToLetter(header.length);
     await valuesUpdate(accessToken, spreadsheetId, `${monthTitle}!A1:${endCol}1`, [header]);
 
-    return new Response(JSON.stringify({ success: true, spreadsheetId, message: "已建立或更新試算表" }), {
-      headers: { "Content-Type": "application/json" }
-    });
+    return new Response(JSON.stringify({ success: true, spreadsheetId, message: "已建立或更新試算表" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
-    return new Response(JSON.stringify({ success: false, message: String(e) }), { status: 500 });
+    const msg = e instanceof Error ? e.message : String(e);
+    return new Response(JSON.stringify({ success: false, message: msg }), { status: 500, headers: corsHeaders });
   }
 });

@@ -3,8 +3,17 @@ import type { SheetConfig, SheetOperation } from "../types";
 
 export async function getGoogleAccessToken(): Promise<string | null> {
   if (!supabase) return null;
-  const { data } = await supabase.auth.getSession();
-  return (data.session as any)?.provider_token ?? null;
+  let { data } = await supabase.auth.getSession();
+  let token = (data.session as any)?.provider_token ?? null;
+  if (!token) {
+    try {
+      const { data: refreshed } = await supabase.auth.refreshSession();
+      token = (refreshed.session as any)?.provider_token ?? null;
+    } catch {
+      // ignore
+    }
+  }
+  return token;
 }
 
 export async function fetchUserSheets(): Promise<SheetConfig[]> {
@@ -38,7 +47,25 @@ export async function upsertUserSheet(input: { id?: string; title: string; sprea
 
 export async function deleteUserSheet(id: string) {
   if (!supabase) throw new Error("Supabase not ready");
-  const { error } = await supabase.from("user_sheets").delete().eq("id", id);
+  try {
+    const token = await getGoogleAccessToken();
+    const { data: row } = await supabase.from("user_sheets").select("spreadsheet_id").eq("id", id).maybeSingle();
+    const spreadsheetId = (row as any)?.spreadsheet_id as string | undefined;
+    if (token && spreadsheetId) {
+      await supabase.functions.invoke("delete-sheet", { body: { accessToken: token, spreadsheetId } });
+    }
+  } catch (e) {
+    // ignore remote delete error; still remove DB record
+    console.warn(e);
+  } finally {
+    const { error } = await supabase.from("user_sheets").delete().eq("id", id);
+    if (error) throw error;
+  }
+}
+
+export async function updateUserSheetTitle(id: string, title: string) {
+  if (!supabase) throw new Error("Supabase not ready");
+  const { error } = await supabase.from("user_sheets").update({ title }).eq("id", id);
   if (error) throw error;
 }
 
@@ -97,3 +124,20 @@ export async function listDriveFolders(accessToken: string, parentId?: string) {
   return json.files as Array<{ id: string; name: string; parents?: string[] }>; 
 }
 
+export async function renameRemoteSheet(params: { accessToken: string; spreadsheetId: string; title: string }) {
+  if (!supabase) throw new Error("Supabase not ready");
+  const { data, error } = await supabase.functions.invoke("rename-sheet", {
+    body: { accessToken: params.accessToken, spreadsheetId: params.spreadsheetId, title: params.title }
+  });
+  if (error) throw error;
+  return data as { success: boolean };
+}
+
+export async function deleteRemoteSheet(params: { accessToken: string; spreadsheetId: string }) {
+  if (!supabase) throw new Error("Supabase not ready");
+  const { data, error } = await supabase.functions.invoke("delete-sheet", {
+    body: { accessToken: params.accessToken, spreadsheetId: params.spreadsheetId }
+  });
+  if (error) throw error;
+  return data as { success: boolean };
+}

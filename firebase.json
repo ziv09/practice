@@ -1,6 +1,6 @@
 {
   "hosting": {
-    "target": "production",
+    "site": "practice-e2042",
     "public": "client/dist",
     "ignore": [
       "firebase.json",
