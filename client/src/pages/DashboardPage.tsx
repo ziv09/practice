@@ -1,13 +1,15 @@
-﻿import React, { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { nanoid } from "nanoid";
 import dayjs from "dayjs";
 import { Line, PolarArea } from "react-chartjs-2";
 import { FiPlusCircle, FiTrash2, FiArrowUp, FiArrowDown } from "react-icons/fi";
 import { usePracticeStore } from "../store/practiceStore";
 import { sumDaily, getStreak } from "../utils/practice";
-import "../lib/chart";const WIDGET_PRESETS = [
+import "../lib/chart";
+
+const WIDGET_PRESETS = [
   { type: "weekly-progress" as const, title: "每週進度" },
-  { type: "top-tasks" as const, title: "功課排行" },
+  { type: "top-tasks" as const, title: "熱門功課" },
   { type: "streak" as const, title: "連續天數" }
 ];
 
@@ -58,13 +60,13 @@ function DashboardPage() {
     switch (type) {
       case "weekly-progress":
         return (
-          <Line data={{ labels: weeklyLabels, datasets: [{ label: "每週總數", data: weeklyCounts, backgroundColor: "rgba(168,85,247,.3)", borderColor: "#a855f7", tension: .4, fill: true }] }} options={{ plugins:{ legend:{ display:false }}, scales:{ y:{ beginAtZero:true, ticks:{ stepSize:1 }}}}} />
+          <Line data={{ labels: weeklyLabels, datasets: [{ label: "每週趨勢", data: weeklyCounts, backgroundColor: "rgba(168,85,247,.3)", borderColor: "#a855f7", tension: .4, fill: true }] }} options={{ plugins:{ legend:{ display:false }}, scales:{ y:{ beginAtZero:true, ticks:{ stepSize:1 }}}}} />
         );
       case "top-tasks":
         return topTaskData.length === 0 ? (
           <p className="text-sm text-slate-500">尚無資料。</p>
         ) : (
-          <PolarArea data={{ labels: topTaskData.map((i)=>i.task.name), datasets:[{ label:"總數", data: topTaskData.map((i)=>i.total), backgroundColor: topTaskData.map((i)=>i.task.color ?? "#a855f7")}] }} />
+          <PolarArea data={{ labels: topTaskData.map((i)=>i.task.name), datasets:[{ label:"總量", data: topTaskData.map((i)=>i.total), backgroundColor: topTaskData.map((i)=>i.task.color ?? "#a855f7")}] }} />
         );
       case "streak":
         return (
@@ -78,11 +80,11 @@ function DashboardPage() {
           </ul>
         );
       default:
-        return <p className="text-sm text-slate-500">未知元件：{type}</p>;
+        return <p className="text-sm text-slate-500">未知類型：{type}</p>;
     }
   }
 
-  // 記錄管理狀態
+  // 資料管理區
   const addDailyRecord = usePracticeStore((s) => s.addDailyRecord);
   const removeDailyRecord = usePracticeStore((s) => s.removeDailyRecord);
   const [taskId, setTaskId] = useState<string>("");
@@ -93,35 +95,42 @@ function DashboardPage() {
     return records.filter((r) => (!id || r.taskId === id) && r.date >= start && r.date <= end).sort((a, b) => b.date.localeCompare(a.date));
   }, [records, taskId, start, end, tasks]);
   async function handleEditRecord(r: { taskId: string; date: string; count: number }) {
-    const value = window.prompt("輸入遍數", String(r.count));
+    const value = window.prompt("輸入自訂", String(r.count));
     if (value === null) return;
     const parsed = Number(value);
     if (Number.isNaN(parsed)) return alert("請輸入數字");
     await addDailyRecord({ taskId: r.taskId, date: r.date, count: Math.max(0, parsed) });
   }
   async function handleDeleteRecord(r: { taskId: string; date: string }) {
-    const ok = window.confirm(`確定刪除 ${r.date} 的記錄？`);
-    if (!ok) return;
     await removeDailyRecord(r.taskId, r.date);
   }
 
   return (
     <div className="space-y-6">
       <section className="rounded-2xl bg-white p-4 shadow-sm sm:p-6">
-        <h2 className="text-lg font-semibold">自訂視覺</h2>
-        <p className="text-sm text-slate-500">選擇要顯示的資料，打造儀表板。</p>
-        <div className="mt-3 flex flex-wrap gap-3">
-          {WIDGET_PRESETS.map((preset) => (
-            <button key={preset.type} type="button" onClick={() => handleAddWidget(preset.type, preset.title)} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 hover:border-primary hover:text-primary">
-              <FiPlusCircle /> 新增 {preset.title}
-            </button>
-          ))}
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold">儀表板</h2>
+            <p className="text-sm text-slate-500">選擇要顯示的資料，打造儀表板。</p>
+          </div>
+          <div className="flex items-center gap-2">
+            {WIDGET_PRESETS.map((preset) => (
+              <button
+                key={preset.type}
+                type="button"
+                className="inline-flex items-center gap-2 rounded-lg border border-primary px-3 py-2 text-sm font-semibold text-primary"
+                onClick={() => handleAddWidget(preset.type, preset.title)}
+              >
+                <FiPlusCircle /> {preset.title}
+              </button>
+            ))}
+          </div>
         </div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2">
+      <section className="grid gap-4 sm:grid-cols-2">
         {widgets.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-slate-500">尚未新增元件</div>
+          <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-slate-500">尚無小工具。</div>
         ) : (
           widgets.map((widget) => (
             <article key={widget.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -143,12 +152,12 @@ function DashboardPage() {
       </section>
 
       <section className="rounded-2xl bg-white p-4 shadow-sm sm:p-6">
-        <h2 className="text-lg font-semibold">記錄管理</h2>
+        <h2 className="text-lg font-semibold">資料管理</h2>
         <div className="grid gap-3 sm:grid-cols-3 mt-3">
           <div>
             <label className="block text-xs text-slate-500">功課</label>
             <select className="w-full rounded-lg border border-slate-200 px-3 py-2" value={taskId} onChange={(e) => setTaskId(e.target.value)}>
-              <option value="">（全部）</option>
+              <option value="">（未選擇）</option>
               {tasks.map((t) => (
                 <option key={t.id} value={t.id}>{t.name}</option>
               ))}
@@ -165,7 +174,7 @@ function DashboardPage() {
         </div>
         <div className="mt-4">
           {filtered.length === 0 ? (
-            <p className="text-sm text-slate-500">區間內沒有資料</p>
+            <p className="text-sm text-slate-500">這段期間沒有資料</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
@@ -173,8 +182,8 @@ function DashboardPage() {
                   <tr className="text-left text-slate-500">
                     <th className="px-2 py-2">日期</th>
                     <th className="px-2 py-2">功課</th>
-                    <th className="px-2 py-2">遍數</th>
-                    <th className="px-2 py-2">動作</th>
+                    <th className="px-2 py-2">數量</th>
+                    <th className="px-2 py-2">操作</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -187,7 +196,7 @@ function DashboardPage() {
                         <td className="px-2 py-2">{r.count}</td>
                         <td className="px-2 py-2">
                           <div className="flex gap-2">
-                            <button className="rounded border border-slate-200 px-2 py-1" onClick={() => handleEditRecord(r)}>編輯</button>
+                            <button className="rounded border border-slate-200 px-2 py-1" onClick={() => handleEditRecord(r)}>修改</button>
                             <button className="rounded border border-rose-200 px-2 py-1 text-rose-600" onClick={() => handleDeleteRecord(r)}>刪除</button>
                           </div>
                         </td>
@@ -205,3 +214,4 @@ function DashboardPage() {
 }
 
 export default DashboardPage;
+

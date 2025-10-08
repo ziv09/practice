@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { FiPlusCircle, FiBell, FiTrash2 } from "react-icons/fi";
 import clsx from "clsx";
 import { usePracticeStore } from "../store/practiceStore";

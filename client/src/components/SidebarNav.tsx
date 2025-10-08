@@ -1,4 +1,4 @@
-﻿import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import type { IconType } from "react-icons";
 import { FiMenu } from "react-icons/fi";
 import { useState } from "react";
@@ -24,7 +24,7 @@ function SidebarNav({ items }: SidebarNavProps) {
         type="button"
         className="fixed bottom-24 right-4 z-30 rounded-full bg-primary p-3 text-white shadow-lg transition sm:hidden"
         onClick={() => setOpen((prev) => !prev)}
-        aria-label="開關選單"
+        aria-label="開啟選單"
       >
         <FiMenu className="h-5 w-5" />
       </button>
@@ -36,7 +36,7 @@ function SidebarNav({ items }: SidebarNavProps) {
       >
         <div className="mb-8 px-2">
           <span className="text-lg font-semibold text-primary">Practice</span>
-          <p className="text-xs text-slate-500">每日記錄</p>
+          <p className="text-xs text-slate-500">每日練習</p>
         </div>
         <ul className="flex-1 space-y-2">
           {items.map((item) => {

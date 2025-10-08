@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React from "react";
 
 type ModalProps = {
   open: boolean;
@@ -17,7 +17,7 @@ export default function Modal({ open, onClose, title, children, widthClass = "ma
         <div className="mb-3 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-slate-800">{title}</h3>
           <button className="rounded-lg px-2 py-1 text-slate-500 hover:bg-slate-100" onClick={onClose}>
-            關閉
+          <button className="rounded-lg px-2 py-1 text-slate-500 hover:bg-slate-100" onClick={onClose}>關閉</button>
           </button>
         </div>
         {children}

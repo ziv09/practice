@@ -11,7 +11,7 @@ export default defineConfig({
       manifest: {
         name: "Practice",
         short_name: "Practice",
-        description: "記錄每日功課、目標與心得的進階 PWA。",
+        description: "一款紀錄習慣、目標與日誌的 PWA。",
         theme_color: "#1f2937",
         background_color: "#f9fafb",
         display: "standalone",
@@ -36,7 +36,8 @@ export default defineConfig({
         ]
       },
       workbox: {
-        globPatterns: ["**/*.{js,css,html,ico,png,svg,json}"]
+        globPatterns: ["**/*.{js,css,html,ico,png,svg,json}"],
+        cleanupOutdatedCaches: true
       },
       devOptions: {
         enabled: false

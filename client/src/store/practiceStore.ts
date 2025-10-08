@@ -179,36 +179,53 @@ export const usePracticeStore = create<PracticeStore>()(
       settings: defaultSettings,
       pendingOperations: [],
       async loadInitialData() {
-        const [tasks, records, goals, journalEntries, widgets, templates, settings, operations, categories] =
-          await Promise.all([
-            db.tasks.orderBy("order").toArray(),
-            db.records.toArray(),
-            db.goals.toArray(),
-            db.journal.toArray(),
-            db.widgets.toArray(),
-            db.templates.toArray(),
-            db.settings.get(SETTINGS_ID),
-            db.operations.toArray(),
-            db.categories.toArray()
-          ]);
+        try {
+          const [tasks, records, goals, journalEntries, widgets, templates, settings, operations, categories] =
+            await Promise.all([
+              db.tasks.orderBy("order").toArray(),
+              db.records.toArray(),
+              db.goals.toArray(),
+              db.journal.toArray(),
+              db.widgets.toArray(),
+              db.templates.toArray(),
+              db.settings.get(SETTINGS_ID),
+              db.operations.toArray(),
+              db.categories.toArray()
+            ]);
 
-        const shouldSeedTemplates = templates.length === 0;
-        if (shouldSeedTemplates) await db.templates.bulkPut(seededJournalTemplates);
-        const persistedSettings = settings ?? defaultSettings;
-        if (!settings) await db.settings.put(persistedSettings);
+          const shouldSeedTemplates = templates.length === 0;
+          if (shouldSeedTemplates) await db.templates.bulkPut(seededJournalTemplates);
+          const persistedSettings = settings ?? defaultSettings;
+          if (!settings) await db.settings.put(persistedSettings);
 
-        set({
-          ready: true,
-          tasks,
-          records,
-          goals,
-          journalEntries,
-          widgets,
-          journalTemplates: shouldSeedTemplates ? seededJournalTemplates : templates,
-          categories,
-          settings: persistedSettings,
-          pendingOperations: operations
-        });
+          set({
+            ready: true,
+            tasks,
+            records,
+            goals,
+            journalEntries,
+            widgets,
+            journalTemplates: shouldSeedTemplates ? seededJournalTemplates : templates,
+            categories,
+            settings: persistedSettings,
+            pendingOperations: operations
+          });
+        } catch (e) {
+          // Fallback to empty in-memory state to avoid blocking the UI
+          console.error("loadInitialData failed", e);
+          set({
+            ready: true,
+            tasks: [],
+            records: [],
+            goals: [],
+            journalEntries: [],
+            widgets: [],
+            journalTemplates: seededJournalTemplates,
+            categories: [],
+            settings: defaultSettings,
+            pendingOperations: []
+          });
+        }
       },
       async setUser(userId, opts) {
         if (!get().ready) await get().loadInitialData();

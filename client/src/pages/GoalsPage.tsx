@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -40,7 +40,7 @@ function GoalsPage() {
       endDate: dayjs().add(30, "day").format("YYYY-MM-DD"),
       targetCount: 100,
       mode: "total",
-      weekendMultiplier: 1
+      weekendMultiplier: 2
     }
   });
 
@@ -68,7 +68,7 @@ function GoalsPage() {
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold">進行中目標</h2>
-            <p className="text-sm text-slate-500">追蹤各功課的達成率與建議進度</p>
+            <p className="text-sm text-slate-500">選擇要顯示的資料，打造儀表板。</p>
           </div>
           <button
             type="button"
@@ -90,12 +90,8 @@ function GoalsPage() {
                 <div className="flex items-start justify-between">
                   <div>
                     <h3 className="text-lg font-semibold text-slate-800">{goal.name}</h3>
-                    <p className="text-sm text-slate-500">
-                      功課：{task?.name ?? "已刪除"}（{goal.startDate} ~ {goal.endDate}）
-                    </p>
-                    <p className="text-xs text-slate-400">
-                      目標 {goal.targetCount} 次
-                    </p>
+                    <p className="text-sm text-slate-500">功課：{task?.name ?? "已刪除"}（{goal.startDate} ~ {goal.endDate}）</p>
+                    <p className="text-xs text-slate-400">目標 {goal.targetCount} 次</p>
                   </div>
                   <button
                     type="button"
@@ -112,7 +108,7 @@ function GoalsPage() {
                 <div className="mt-3 flex items-center justify-between text-sm text-slate-600">
                   <span>已完成 {progress.totalCompleted}</span>
                   <span>剩餘 {progress.left}</span>
-                  <span>建議每日 {Number.isFinite(progress.suggestedDaily) ? Math.ceil(progress.suggestedDaily) : 0}</span>
+                  <span>建議／每日 {Number.isFinite(progress.suggestedDaily) ? Math.ceil(progress.suggestedDaily) : 0}</span>
                 </div>
               </article>
             );
@@ -130,9 +126,9 @@ function GoalsPage() {
               {errors.name && <p className="mt-1 text-xs text-rose-500">{errors.name.message}</p>}
             </div>
             <div>
-              <label className="block text-xs text-slate-500">對應功課</label>
+              <label className="block text-xs text-slate-500">選擇功課</label>
               <select className="w-full rounded-lg border border-slate-200 px-3 py-2" {...register("taskId")}>
-                <option value="">選擇功課</option>
+                <option value="">請選擇功課</option>
                 {tasks.map((task) => (
                   <option value={task.id} key={task.id}>
                     {task.name}
@@ -161,13 +157,13 @@ function GoalsPage() {
             <div>
               <label className="block text-xs text-slate-500">計算方式</label>
               <select className="w-full rounded-lg border border-slate-200 px-3 py-2" {...register("mode")}>
-                <option value="total">固定總量</option>
-                <option value="daily">每日平均</option>
+                <option value="total">總量累積</option>
+                <option value="daily">每日固定</option>
                 <option value="weighted">週末加權</option>
               </select>
             </div>
             <div className="sm:col-span-2">
-              <label className="block text-xs text-slate-500">週末加權（僅加權模式）</label>
+              <label className="block text-xs text-slate-500">週末加權（倍率，預設 2）</label>
               <input
                 type="number"
                 className="w-full rounded-lg border border-slate-200 px-3 py-2"

@@ -1,4 +1,4 @@
-﻿import { Outlet, useLocation } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import {
   FiCalendar,
   FiList,
@@ -19,22 +19,21 @@ import { usePracticeStore } from "../store/practiceStore";
 
 const NAV_ITEMS = [
   { to: "/today", label: "今日", icon: FiCalendar },
-  { to: "/tasks", label: "功課", icon: FiList },
-    { to: "/goals", label: "目標", icon: FiTarget },
+  { to: "/tasks", label: "習慣", icon: FiList },
+  { to: "/goals", label: "目標", icon: FiTarget },
   { to: "/dashboard", label: "儀表板", icon: FiPieChart },
-  { to: "/journal", label: "記事", icon: FiBookOpen },
+  { to: "/journal", label: "日誌", icon: FiBookOpen },
   { to: "/reminders", label: "提醒", icon: FiBell },
   { to: "/settings", label: "設定", icon: FiSettings }
 ];
 
 const TITLE_MAP: Record<string, string> = {
-  "/today": "今日功課",
-  "/tasks": "功課管理",
-  "/records": "紀錄管理",
-  "/goals": "目標追蹤",
-  "/dashboard": "視覺化面板",
-  "/journal": "修行記事",
-  "/reminders": "提醒設定",
+  "/today": "今日練習",
+  "/tasks": "習慣管理",
+  "/goals": "目標進度",
+  "/dashboard": "儀表板",
+  "/journal": "日誌",
+  "/reminders": "通知設定",
   "/settings": "系統設定"
 };
 
@@ -73,9 +72,7 @@ function MainLayout() {
                   await supabase.auth.signOut();
                   await setUser(null);
                 }}
-              >
-                登出
-              </button>
+              >登出</button>
             </div>
           </div>
         </header>

@@ -123,8 +123,7 @@ function TasksPage() {
                   </h3>
                   <p className="text-sm text-slate-500">分類：{String(task.category || "未分類")}</p>
                   <p className="text-xs text-slate-400">
-                    {task.allowReminder ? "允許提醒" : "不提醒"}．
-                    {task.includeInDashboard ? "顯示於儀表板" : "不顯示於儀表板"}
+                    {task.allowReminder ? "允許提醒" : "不提醒"}．{task.includeInDashboard ? "顯示於儀表板" : "不顯示於儀表板"}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -222,7 +221,7 @@ function TasksPage() {
                       checked={editValues.includeInDashboard}
                       onChange={(event) => setEditValues({ ...editValues, includeInDashboard: event.target.checked })}
                     />
-                    顯示在儀表板
+                    顯示於儀表板
                   </label>
                 </div>
               )}
@@ -241,7 +240,7 @@ function TasksPage() {
           <div>
             <label className="block text-xs text-slate-500">分類</label>
             <div className="flex gap-2">
-              <select className="w-full rounded-lg border border-slate-200 px-3 py-2" {...register("category")}> 
+              <select className="w-full rounded-lg border border-slate-200 px-3 py-2" {...register("category")}>
                 <option value="">未分類</option>
                 {categories.map((c) => (
                   <option key={c.id} value={c.name}>

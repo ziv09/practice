@@ -99,15 +99,17 @@ serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
   try {
-    const { accessToken, template = "Practice-{date}", spreadsheetId: existingId, folderId, taskIds = [] } = (await req.json()) as {
+    const { accessToken, template = "Practice-{date}", spreadsheetId: existingId, folderId, taskIds = [], tasks = [], snapshot } = (await req.json()) as {
       accessToken?: string;
       template?: string;
       spreadsheetId?: string;
       folderId?: string;
       taskIds?: string[];
+      tasks?: Array<{ id: string; name: string }>;
+      snapshot?: { records?: Array<{ taskId: string; date: string; count?: number }>; tasks?: Array<{ id: string; name: string }> };
     };
     if (!accessToken)
-      return new Response(JSON.stringify({ success: false, message: "missing accessToken" }), { status: 400, headers: { "Content-Type": "application/json" } });
+      return new Response(JSON.stringify(\{\ success:\ true,\ spreadsheetId,\ debug:\ \{\ rowsWritten:\ \(taskList\?\.length\ \?\?\ 0\),\ days,\ monthTitle\ }\ }), { status: 400, headers: { "Content-Type": "application/json" } });
     if (!taskIds || taskIds.length === 0)
       return new Response(JSON.stringify({ success: false, message: "missing taskIds" }), { status: 400, headers: { "Content-Type": "application/json" } });
 
@@ -137,7 +139,49 @@ serve(async (req) => {
     const endCol = colIndexToLetter(header.length);
     await valuesUpdate(accessToken, spreadsheetId, `${monthTitle}!A1:${endCol}1`, [header]);
 
-    return new Response(JSON.stringify({ success: true, spreadsheetId, message: "已建立或更新試算表" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    // Normalize task list: prefer tasks param, fallback to snapshot.tasks filtered by taskIds
+    let taskList: Array<{ id: string; name: string }> = Array.isArray(tasks) ? tasks : [];
+    if ((!taskList || taskList.length === 0) && snapshot && Array.isArray((snapshot as any).tasks)) {
+      const snapTasks = ((snapshot as any).tasks as Array<{ id: string; name: string }>);
+      taskList = snapTasks.filter((t) => taskIds.includes(t.id)).map((t) => ({ id: t.id, name: t.name }));
+    }
+
+    // Write task rows (Item + hidden taskId)
+    if (Array.isArray(taskList) && taskList.length > 0) {
+      const rows = taskList.map((t) => {
+        const row = new Array(days + 2).fill("");
+        row[0] = (t as any).name ?? "";
+        row[days + 1] = (t as any).id;
+        return row;
+      });
+      await valuesUpdate(accessToken, spreadsheetId, `${monthTitle}!A2:${endCol}${rows.length + 1}`, rows);
+    }
+
+    // If snapshot provided, pre-fill current month values
+    if (snapshot && Array.isArray((snapshot as any).records) && taskList.length > 0) {
+      const taskIndex: Record<string, number> = {};
+      (taskList as any[]).forEach((t, i) => (taskIndex[(t as any).id] = i));
+      const values: string[][] = Array.from({ length: (taskList as any[]).length }, () => Array.from({ length: days }, () => ""));
+      for (const r of (snapshot as any).records) {
+        if (!r?.taskId || !r?.date) continue;
+        const idx = taskIndex[r.taskId];
+        if (idx === undefined) continue;
+        const d = new Date(r.date);
+        const title = getMonthTitle(d);
+        if (title !== monthTitle) continue;
+        const day = d.getUTCDate();
+        const prev = Number(values[idx][day - 1] || 0);
+        const add = Number(r.count ?? 0);
+        const next = prev + (Number.isFinite(add) ? add : 0);
+        values[idx][day - 1] = next ? String(next) : "";
+      }
+      const endDataCol = colIndexToLetter(1 + days);
+      if (values.length > 0) {
+        await valuesUpdate(accessToken, spreadsheetId, `${monthTitle}!B2:${endDataCol}${values.length + 1}`, values);
+      }
+    }
+
+    return new Response(JSON.stringify({ success: true, spreadsheetId, message: "撌脣遣蝡??湔閰衣?銵? }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return new Response(JSON.stringify({ success: false, message: msg }), { status: 500, headers: corsHeaders });

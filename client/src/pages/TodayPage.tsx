@@ -1,5 +1,7 @@
-﻿import { useMemo } from "react";
+import { useMemo } from "react";
 import dayjs from "dayjs";
+import isSameOrAfter from "dayjs/plugin/isSameOrAfter";
+dayjs.extend(isSameOrAfter);
 import { FiPlus, FiMinus, FiRefreshCw, FiTrash2 } from "react-icons/fi";
 import { usePracticeStore } from "../store/practiceStore";
 import { calculateGoalProgress, getRecordForDate } from "../utils/practice";
@@ -38,7 +40,7 @@ function TodayPage() {
   }
 
   async function handleCustom(taskId: string) {
-    const value = window.prompt("輸入遍數", String(getRecordForDate(records, taskId, today)?.count ?? 0));
+    const value = window.prompt("輸入自訂", String(getRecordForDate(records, taskId, today)?.count ?? 0));
     if (value === null) return;
     const parsed = Number(value);
     if (Number.isNaN(parsed)) {
@@ -66,7 +68,7 @@ function TodayPage() {
       })
       .filter(Boolean) as Array<{ taskId: string; date: string; count: number; note?: string }>;
     if (copyRecords.length === 0) {
-      window.alert("昨天沒有可複製的記錄");
+      window.alert("沒有可複製的昨日記錄");
       return;
     }
     await bulkUpsertDailyRecords(copyRecords);
@@ -113,7 +115,7 @@ function TodayPage() {
                     type="button"
                     className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-300 text-slate-600 transition hover:border-primary hover:text-primary"
                     onClick={() => handleAdjust(task.id, -1)}
-                    aria-label="減少 1"
+                    aria-label="減 1"
                   >
                     <FiMinus />
                   </button>
@@ -124,7 +126,7 @@ function TodayPage() {
                     type="button"
                     className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-primary text-white shadow transition hover:bg-primary/90"
                     onClick={() => handleAdjust(task.id, 1)}
-                    aria-label="增加 1"
+                    aria-label="加 1"
                   >
                     <FiPlus />
                   </button>
@@ -161,11 +163,11 @@ function TodayPage() {
                   <div>
                     <p className="font-medium text-slate-700">{goal.name}</p>
                     <p className="text-slate-500">
-                      {progress.totalCompleted}/{goal.targetCount} {goal.mode === "total" ? "累計" : ""}
+                      {progress.totalCompleted}/{goal.targetCount} {goal.mode === "total" ? "總計" : ""}
                       {progress.isBehind ? <span className="ml-2 text-rose-500">進度落後</span> : ""}
                     </p>
                   </div>
-                  <span className="text-xs text-slate-500">建議每日 {Number.isFinite(progress.suggestedDaily) ? Math.ceil(progress.suggestedDaily) : 0}</span>
+                  <span className="text-xs text-slate-500">建議／每日 {Number.isFinite(progress.suggestedDaily) ? Math.ceil(progress.suggestedDaily) : 0}</span>
                 </div>
                 <div className="h-2 w-full rounded-full bg-slate-200">
                   <div className="h-2 rounded-full bg-primary" style={{ width: `${Math.min(100, progress.progress * 100)}%` }} />
@@ -180,3 +182,4 @@ function TodayPage() {
 }
 
 export default TodayPage;
+

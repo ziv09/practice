@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { usePracticeStore } from "../store/practiceStore";
-import type { SyncSettings } from "../types";
 import { supabase } from "../lib/supabaseClient";
 import Modal from "../components/Modal";
 import {
@@ -21,28 +20,27 @@ import {
 } from "../services/sheetSync";
 
 function SettingsPage() {
-  const settings = usePracticeStore((s) => s.settings);
-  const updateSettings = usePracticeStore((s) => s.updateSettings);
-  const exportSnapshot = usePracticeStore((s) => s.exportSnapshot);
   const setUser = usePracticeStore((s) => s.setUser);
-  const pendingOperations = usePracticeStore((s) => s.pendingOperations);
   const tasks = usePracticeStore((s) => s.tasks);
+  const exportSnapshot = usePracticeStore((s) => s.exportSnapshot);
 
   const [message, setMessage] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+
   const [sheets, setSheets] = useState<any[]>([]);
   const [loadingSheets, setLoadingSheets] = useState(false);
-  const [newSheetTitle, setNewSheetTitle] = useState("功課-{date}");
+  const [newSheetTitle, setNewSheetTitle] = useState("Practice-{date}");
   const [newSheetFolder, setNewSheetFolder] = useState<{ id: string; name: string } | null>(null);
   const [newSheetTaskIds, setNewSheetTaskIds] = useState<string[]>([]);
-  const [folderModalOpen, setFolderModalOpen] = useState(false);
-  const [folderListing, setFolderListing] = useState<Array<{ id: string; name: string; parents?: string[] }>>([]);
-  const [folderPickTarget, setFolderPickTarget] = useState<"sheet" | "journal">("sheet");
 
   const [journalSheets, setJournalSheets] = useState<any[]>([]);
   const [loadingJournalSheets, setLoadingJournalSheets] = useState(false);
-  const [newJournalTitle, setNewJournalTitle] = useState("記事-{date}");
+  const [newJournalTitle, setNewJournalTitle] = useState("Journal-{date}");
   const [newJournalFolder, setNewJournalFolder] = useState<{ id: string; name: string } | null>(null);
+
+  const [folderModalOpen, setFolderModalOpen] = useState(false);
+  const [folderListing, setFolderListing] = useState<Array<{ id: string; name: string; parents?: string[] }>>([]);
+  const [folderPickTarget, setFolderPickTarget] = useState<"sheet" | "journal">("sheet");
 
   useEffect(() => {
     (async () => {
@@ -89,11 +87,6 @@ function SettingsPage() {
     } finally {
       setLoadingJournalSheets(false);
     }
-  }
-
-  async function handleSyncChange(update: Partial<SyncSettings>) {
-    await updateSettings({ sync: { ...settings.sync, ...update } });
-    setMessage("已更新同步設定");
   }
 
   async function handleGoogleConnect() {
@@ -155,19 +148,30 @@ function SettingsPage() {
         setMessage("請先登入 Google");
         return;
       }
-      const selectedTasks = newSheetTaskIds;
-      if (selectedTasks.length === 0) {
-        setMessage("請至少選擇一個功課項目");
+      const selected = newSheetTaskIds;
+      if (selected.length === 0) {
+        setMessage("請至少選擇一項習慣");
         return;
       }
-      const resp = await exportOrUpdateSheet({ accessToken: token, folderId: newSheetFolder?.id, title: newSheetTitle, taskIds: selectedTasks });
+      const selectedTasks = tasks
+        .filter((t) => selected.includes(t.id))
+        .map((t) => ({ id: t.id, name: t.name }));
+      const snapshot = await exportSnapshot();
+      const resp = await exportOrUpdateSheet({
+        accessToken: token,
+        folderId: newSheetFolder?.id,
+        title: newSheetTitle,
+        taskIds: selected,
+        tasks: selectedTasks,
+        snapshot
+      });
       const spreadsheetId = resp.spreadsheetId;
-      await upsertUserSheet({ title: newSheetTitle, spreadsheetId, folderId: newSheetFolder?.id, taskIds: selectedTasks });
+      await upsertUserSheet({ title: newSheetTitle, spreadsheetId, folderId: newSheetFolder?.id, taskIds: selected });
       await loadSheets();
-      setMessage("已建立／更新試算表");
+      setMessage("已建立或更新試算表");
     } catch (e) {
       console.error(e);
-      setMessage("建立／更新試算表失敗");
+      setMessage("建立或更新試算表失敗");
     }
   }
 
@@ -183,10 +187,10 @@ function SettingsPage() {
       const existing = journalSheets.find((j: any) => j.spreadsheetId === spreadsheetId || j.title === newJournalTitle);
       await upsertUserJournalSheet({ id: existing?.id, title: newJournalTitle, spreadsheetId, folderId: newJournalFolder?.id });
       await loadJournalSheets();
-      setMessage("已建立／更新記事試算表");
+      setMessage("已建立或更新試算表");
     } catch (e) {
       console.error(e);
-      setMessage("建立／更新記事試算表失敗");
+      setMessage("建立或更新試算表失敗");
     }
   }
 
@@ -207,27 +211,25 @@ function SettingsPage() {
         </div>
       </section>
 
-      {/* 移除「立即匯出」區塊；由背景自動同步處理 */}
-
       <section className="rounded-2xl bg-white p-4 shadow-sm sm:p-6">
         <h2 className="text-lg font-semibold">Sheet 匯出</h2>
-        <p className="text-sm text-slate-500">選擇儲存資料夾與功課項目，建立或沿用同名檔；後續新增/刪除資料會自動同步至試算表。</p>
+        <p className="text-sm text-slate-500">選擇資料夾與要匯出的習慣。建立或更新試算表；之後新增/刪除會自動同步。</p>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2">
             <label className="block text-xs text-slate-500">標題模板</label>
             <input className="w-full rounded-lg border border-slate-200 px-3 py-2" value={newSheetTitle} onChange={(e) => setNewSheetTitle(e.target.value)} />
           </div>
           <div>
-            <label className="block text-xs text-slate-500">儲存資料夾（可選）</label>
+            <label className="block text-xs text-slate-500">匯出資料夾（選填）</label>
             <div className="flex items-center gap-2">
               <input className="w-full rounded-lg border border-slate-200 px-3 py-2" readOnly value={newSheetFolder?.name ?? "（未選擇）"} />
               <button type="button" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" onClick={openFolderPicker}>選擇</button>
             </div>
           </div>
           <div>
-            <label className="block text-xs text-slate-500">要匯出的功課項目</label>
+            <label className="block text-xs text-slate-500">要匯出的習慣項目</label>
             <div className="max-h-48 overflow-auto rounded-lg border border-slate-200 p-2">
-              {tasks.length === 0 && <p className="text-sm text-slate-500">尚無功課，請先新增</p>}
+              {tasks.length === 0 && <p className="text-sm text-slate-500">尚無習慣，請先新增</p>}
               {tasks.map((t) => (
                 <label key={`sel-${t.id}`} className="mb-1 flex items-center gap-2 text-sm">
                   <input
@@ -269,14 +271,14 @@ function SettingsPage() {
                       className="rounded-lg border border-slate-200 px-3 py-1 text-slate-700"
                       onClick={async () => {
                         try {
-                          const next = window.prompt("重新命名（Drive 檔名＋DB title）", s.title);
+                          const next = window.prompt("重新命名（Drive 檔名 + DB title）", s.title);
                           if (!next || next === s.title) return;
                           const token = await getGoogleAccessToken();
                           if (!token) { setMessage("請先登入 Google"); return; }
                           await renameRemoteSheet({ accessToken: token, spreadsheetId: s.spreadsheetId, title: next });
                           await updateUserSheetTitle(s.id, next);
                           await loadSheets();
-                          setMessage("已重新命名");
+                          setMessage("已完成重新命名");
                         } catch (e) {
                           console.error(e);
                           setMessage("重新命名失敗");
@@ -304,19 +306,15 @@ function SettingsPage() {
       </section>
 
       <section className="rounded-2xl bg-white p-4 shadow-sm sm:p-6">
-        <h2 className="text-lg font-semibold">記事匯出</h2>
-        <p className="text-sm text-slate-500">建立或沿用同名檔，系統會自動同步記事到當月分頁。</p>
+        <h2 className="text-lg font-semibold">日誌匯出</h2>
+        <p className="text-sm text-slate-500">建立或沿用日誌試算表，系統會自動同步每日記錄。</p>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2">
             <label className="block text-xs text-slate-500">標題模板</label>
-            <input
-              className="w-full rounded-lg border border-slate-200 px-3 py-2"
-              value={newJournalTitle}
-              onChange={(e) => setNewJournalTitle(e.target.value)}
-            />
+            <input className="w-full rounded-lg border border-slate-200 px-3 py-2" value={newJournalTitle} onChange={(e) => setNewJournalTitle(e.target.value)} />
           </div>
           <div>
-            <label className="block text-xs text-slate-500">儲存資料夾（可選）</label>
+            <label className="block text-xs text-slate-500">匯出資料夾（選填）</label>
             <div className="flex items-center gap-2">
               <input className="w-full rounded-lg border border-slate-200 px-3 py-2" readOnly value={newJournalFolder?.name ?? "（未選擇）"} />
               <button type="button" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" onClick={openJournalFolderPicker}>選擇</button>
@@ -328,7 +326,7 @@ function SettingsPage() {
         </div>
 
         <div className="mt-6">
-          <h3 className="mb-2 text-sm font-semibold text-slate-700">已管理的記事試算表</h3>
+          <h3 className="mb-2 text-sm font-semibold text-slate-700">已管理的日誌試算表</h3>
           {loadingJournalSheets ? (
             <p className="text-sm text-slate-500">載入中...</p>
           ) : journalSheets.length === 0 ? (
@@ -347,14 +345,14 @@ function SettingsPage() {
                       className="rounded-lg border border-slate-200 px-3 py-1 text-slate-700"
                       onClick={async () => {
                         try {
-                          const next = window.prompt("重新命名（Drive 檔名＋DB title）", s.title);
+                          const next = window.prompt("重新命名（Drive 檔名 + DB title）", s.title);
                           if (!next || next === s.title) return;
                           const token = await getGoogleAccessToken();
                           if (!token) { setMessage("請先登入 Google"); return; }
                           await renameRemoteSheet({ accessToken: token, spreadsheetId: s.spreadsheetId, title: next });
                           await updateUserJournalSheetTitle(s.id, next);
                           await loadJournalSheets();
-                          setMessage("已重新命名");
+                          setMessage("已完成重新命名");
                         } catch (e) {
                           console.error(e);
                           setMessage("重新命名失敗");
@@ -368,17 +366,15 @@ function SettingsPage() {
                       className="rounded-lg border border-rose-200 px-3 py-1 text-rose-600"
                       onClick={async () => {
                         try {
-                          if (!window.confirm("確定要刪除？（先刪雲端，再刪 DB）")) return;
+                          if (!window.confirm("確定要刪除？（會嘗試刪除雲端檔案與 DB 記錄）")) return;
                           const token = await getGoogleAccessToken();
                           if (token) {
                             try { await deleteRemoteSheet({ accessToken: token, spreadsheetId: s.spreadsheetId }); } catch (e) { console.warn(e); }
                           }
                           await deleteUserJournalSheet(s.id);
                           await loadJournalSheets();
-                          setMessage("已刪除");
                         } catch (e) {
                           console.error(e);
-                          setMessage("刪除失敗");
                         }
                       }}
                     >
@@ -409,7 +405,7 @@ function SettingsPage() {
               <span className="text-xs text-slate-400">{f.id}</span>
             </button>
           ))}
-          {folderListing.length === 0 && <p className="text-sm text-slate-500">沒有可用資料夾或無權限</p>}
+          {folderListing.length === 0 && <p className="text-sm text-slate-500">沒有可用資料夾，請重試</p>}
         </div>
       </Modal>
     </div>
