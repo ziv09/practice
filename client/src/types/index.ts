@@ -192,7 +192,7 @@ export type SheetOperationType =
   | "task.upsert"
   | "task.delete"
   | "record.upsert"
-  | "record.delete";
+  | "record.delete"\n  | "journal.upsert"\n  | "journal.delete";
 
 export type SheetOperation = {
   id: UUID;

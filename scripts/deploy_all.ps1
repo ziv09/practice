@@ -56,7 +56,7 @@ if (-not $SkipSecrets) {
 
 # 4) Deploy functions
 Write-Host 'Deploying Edge Functions...' -ForegroundColor DarkCyan
-$functions = @('export-sheets','sync-sheets','sync-practice','register-push','send-push')
+$functions = @('export-journal','sync-journal','rename-sheet','delete-sheet','export-sheets','sync-sheets','sync-practice','register-push','send-push')
 foreach ($fn in $functions) {
   Write-Host "Deploy: $fn" -ForegroundColor Cyan
   & supabase functions deploy $fn

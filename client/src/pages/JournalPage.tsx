@@ -122,8 +122,8 @@ function JournalPage() {
       <section className="rounded-2xl bg-white p-4 shadow-sm sm:p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-lg font-semibold">修行記事</h2>
-            <p className="text-sm text-slate-500">記錄每日心得、感恩與提醒</p>
+            <h2 className="text-lg font-semibold">記事</h2>
+            <p className="text-sm text-slate-500">管理每日記事（查詢、編輯、刪除）</p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <input
@@ -286,3 +286,4 @@ function JournalPage() {
 }
 
 export default JournalPage;
+

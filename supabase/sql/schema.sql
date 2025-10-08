@@ -52,3 +52,25 @@ create policy if not exists "sheets_update_own" on public.user_sheets
   for update using (auth.uid() = user_id);
 create policy if not exists "sheets_delete_own" on public.user_sheets
   for delete using (auth.uid() = user_id);
+
+-- Journal sheets management
+create table if not exists public.user_journal_sheets (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  spreadsheet_id text not null,
+  folder_id text,
+  title text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.user_journal_sheets enable row level security;
+
+create policy if not exists "journal_sheets_select_own" on public.user_journal_sheets
+  for select using (auth.uid() = user_id);
+create policy if not exists "journal_sheets_insert_own" on public.user_journal_sheets
+  for insert with check (auth.uid() = user_id);
+create policy if not exists "journal_sheets_update_own" on public.user_journal_sheets
+  for update using (auth.uid() = user_id);
+create policy if not exists "journal_sheets_delete_own" on public.user_journal_sheets
+  for delete using (auth.uid() = user_id);

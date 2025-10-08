@@ -20,8 +20,7 @@ import { usePracticeStore } from "../store/practiceStore";
 const NAV_ITEMS = [
   { to: "/today", label: "今日", icon: FiCalendar },
   { to: "/tasks", label: "功課", icon: FiList },
-  { to: "/records", label: "紀錄", icon: FiList },
-  { to: "/goals", label: "目標", icon: FiTarget },
+    { to: "/goals", label: "目標", icon: FiTarget },
   { to: "/dashboard", label: "儀表板", icon: FiPieChart },
   { to: "/journal", label: "記事", icon: FiBookOpen },
   { to: "/reminders", label: "提醒", icon: FiBell },

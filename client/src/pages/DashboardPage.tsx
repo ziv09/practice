@@ -1,25 +1,14 @@
-﻿import { useMemo } from "react";
+﻿import React, { useMemo, useState } from "react";
 import { nanoid } from "nanoid";
 import dayjs from "dayjs";
 import { Line, PolarArea } from "react-chartjs-2";
 import { FiPlusCircle, FiTrash2, FiArrowUp, FiArrowDown } from "react-icons/fi";
 import { usePracticeStore } from "../store/practiceStore";
 import { sumDaily, getStreak } from "../utils/practice";
-import "../lib/chart";
-
-const WIDGET_PRESETS = [
-  {
-    type: "weekly-progress" as const,
-    title: "本週總覽"
-  },
-  {
-    type: "top-tasks" as const,
-    title: "功課占比"
-  },
-  {
-    type: "streak" as const,
-    title: "連續紀錄"
-  }
+import "../lib/chart";const WIDGET_PRESETS = [
+  { type: "weekly-progress" as const, title: "每週進度" },
+  { type: "top-tasks" as const, title: "功課排行" },
+  { type: "streak" as const, title: "連續天數" }
 ];
 
 function DashboardPage() {
@@ -31,109 +20,51 @@ function DashboardPage() {
   async function handleAddWidget(type: (typeof WIDGET_PRESETS)[number]["type"], title: string) {
     const next = [
       ...widgets,
-      {
-        id: nanoid(),
-        type,
-        title,
-        taskIds: tasks.map((task) => task.id),
-        options: {},
-        order: widgets.length
-      }
+      { id: nanoid(), type, title, taskIds: tasks.map((t) => t.id), options: {}, order: widgets.length }
     ];
     await setWidgets(next);
   }
-
   async function handleRemoveWidget(id: string) {
-    await setWidgets(widgets.filter((widget) => widget.id !== id).map((widget, index) => ({ ...widget, order: index })));
+    await setWidgets(widgets.filter((w) => w.id !== id).map((w, i) => ({ ...w, order: i })));
   }
-
   async function handleMoveWidget(id: string, direction: "up" | "down") {
-    const currentIndex = widgets.findIndex((widget) => widget.id === id);
+    const currentIndex = widgets.findIndex((w) => w.id === id);
     const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
     if (targetIndex < 0 || targetIndex >= widgets.length) return;
     const reordered = [...widgets];
     const [item] = reordered.splice(currentIndex, 1);
     reordered.splice(targetIndex, 0, item);
-    await setWidgets(reordered.map((widget, index) => ({ ...widget, order: index })));
+    await setWidgets(reordered.map((w, i) => ({ ...w, order: i })));
   }
 
   const weeklyLabels = useMemo(() => {
     const today = dayjs();
-    return Array.from({ length: 7 })
-      .map((_, index) => today.subtract(6 - index, "day"))
-      .map((day) => day.format("MM/DD"));
+    return Array.from({ length: 7 }).map((_, i) => today.subtract(6 - i, "day").format("MM/DD"));
   }, []);
-
   const weeklyCounts = useMemo(() => {
     const today = dayjs();
-    return Array.from({ length: 7 }).map((_, index) => {
-      const date = today.subtract(6 - index, "day").format("YYYY-MM-DD");
-      return sumDaily(records, date);
-    });
+    return Array.from({ length: 7 }).map((_, i) => sumDaily(records, today.subtract(6 - i, "day").format("YYYY-MM-DD")));
   }, [records]);
-
   const topTaskData = useMemo(() => {
-    const totals = tasks.map((task) => ({
-      task,
-      total: records
-        .filter((record) => record.taskId === task.id)
-        .reduce((acc, record) => acc + record.count, 0)
-    }));
-    return totals.filter((item) => item.total > 0);
+    const totals = tasks.map((task) => ({ task, total: records.filter((r) => r.taskId === task.id).reduce((a, r) => a + r.count, 0) }));
+    return totals.filter((x) => x.total > 0);
   }, [records, tasks]);
-
   const streakStats = useMemo(() => {
     const today = dayjs().format("YYYY-MM-DD");
-    return tasks.map((task) => ({
-      task,
-      streak: getStreak(records, task.id, today)
-    }));
+    return tasks.map((task) => ({ task, streak: getStreak(records, task.id, today) }));
   }, [records, tasks]);
 
   function renderWidget(widgetId: string, type: string) {
     switch (type) {
       case "weekly-progress":
         return (
-          <Line
-            data={{
-              labels: weeklyLabels,
-              datasets: [
-                {
-                  label: "完成次數",
-                  data: weeklyCounts,
-                  backgroundColor: "rgba(168, 85, 247, 0.3)",
-                  borderColor: "#a855f7",
-                  tension: 0.4,
-                  fill: true
-                }
-              ]
-            }}
-            options={{
-              plugins: {
-                legend: { display: false }
-              },
-              scales: {
-                y: { beginAtZero: true, ticks: { stepSize: 1 } }
-              }
-            }}
-          />
+          <Line data={{ labels: weeklyLabels, datasets: [{ label: "每週總數", data: weeklyCounts, backgroundColor: "rgba(168,85,247,.3)", borderColor: "#a855f7", tension: .4, fill: true }] }} options={{ plugins:{ legend:{ display:false }}, scales:{ y:{ beginAtZero:true, ticks:{ stepSize:1 }}}}} />
         );
       case "top-tasks":
         return topTaskData.length === 0 ? (
-          <p className="text-sm text-slate-500">尚未有歷史資料。</p>
+          <p className="text-sm text-slate-500">尚無資料。</p>
         ) : (
-          <PolarArea
-            data={{
-              labels: topTaskData.map((item) => item.task.name),
-              datasets: [
-                {
-                  label: "累積",
-                  data: topTaskData.map((item) => item.total),
-                  backgroundColor: topTaskData.map((item) => item.task.color ?? "#a855f7")
-                }
-              ]
-            }}
-          />
+          <PolarArea data={{ labels: topTaskData.map((i)=>i.task.name), datasets:[{ label:"總數", data: topTaskData.map((i)=>i.total), backgroundColor: topTaskData.map((i)=>i.task.color ?? "#a855f7")}] }} />
         );
       case "streak":
         return (
@@ -147,24 +78,42 @@ function DashboardPage() {
           </ul>
         );
       default:
-        return <p className="text-sm text-slate-500">尚未支援的元件：{type}</p>;
+        return <p className="text-sm text-slate-500">未知元件：{type}</p>;
     }
+  }
+
+  // 記錄管理狀態
+  const addDailyRecord = usePracticeStore((s) => s.addDailyRecord);
+  const removeDailyRecord = usePracticeStore((s) => s.removeDailyRecord);
+  const [taskId, setTaskId] = useState<string>("");
+  const [start, setStart] = useState(dayjs().subtract(30, "day").format("YYYY-MM-DD"));
+  const [end, setEnd] = useState(dayjs().format("YYYY-MM-DD"));
+  const filtered = useMemo(() => {
+    const id = taskId || tasks[0]?.id || "";
+    return records.filter((r) => (!id || r.taskId === id) && r.date >= start && r.date <= end).sort((a, b) => b.date.localeCompare(a.date));
+  }, [records, taskId, start, end, tasks]);
+  async function handleEditRecord(r: { taskId: string; date: string; count: number }) {
+    const value = window.prompt("輸入遍數", String(r.count));
+    if (value === null) return;
+    const parsed = Number(value);
+    if (Number.isNaN(parsed)) return alert("請輸入數字");
+    await addDailyRecord({ taskId: r.taskId, date: r.date, count: Math.max(0, parsed) });
+  }
+  async function handleDeleteRecord(r: { taskId: string; date: string }) {
+    const ok = window.confirm(`確定刪除 ${r.date} 的記錄？`);
+    if (!ok) return;
+    await removeDailyRecord(r.taskId, r.date);
   }
 
   return (
     <div className="space-y-6">
       <section className="rounded-2xl bg-white p-4 shadow-sm sm:p-6">
-        <h2 className="text-lg font-semibold">自訂面板</h2>
-        <p className="text-sm text-slate-500">選擇想要呈現的卡片，後續可調整順序。</p>
+        <h2 className="text-lg font-semibold">自訂視覺</h2>
+        <p className="text-sm text-slate-500">選擇要顯示的資料，打造儀表板。</p>
         <div className="mt-3 flex flex-wrap gap-3">
           {WIDGET_PRESETS.map((preset) => (
-            <button
-              key={preset.type}
-              type="button"
-              onClick={() => handleAddWidget(preset.type, preset.title)}
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 hover:border-primary hover:text-primary"
-            >
-              <FiPlusCircle /> 加入 {preset.title}
+            <button key={preset.type} type="button" onClick={() => handleAddWidget(preset.type, preset.title)} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 hover:border-primary hover:text-primary">
+              <FiPlusCircle /> 新增 {preset.title}
             </button>
           ))}
         </div>
@@ -172,9 +121,7 @@ function DashboardPage() {
 
       <section className="grid gap-4 md:grid-cols-2">
         {widgets.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-slate-500">
-            尚未選擇元件，點擊上方按鈕加入。
-          </div>
+          <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-slate-500">尚未新增元件</div>
         ) : (
           widgets.map((widget) => (
             <article key={widget.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -184,36 +131,74 @@ function DashboardPage() {
                   <p className="text-xs text-slate-500">類型：{widget.type}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    className="rounded-full border border-slate-200 p-2 text-slate-500 hover:border-primary hover:text-primary"
-                    onClick={() => handleMoveWidget(widget.id, "up")}
-                    aria-label="上移"
-                  >
-                    <FiArrowUp />
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-full border border-slate-200 p-2 text-slate-500 hover:border-primary hover:text-primary"
-                    onClick={() => handleMoveWidget(widget.id, "down")}
-                    aria-label="下移"
-                  >
-                    <FiArrowDown />
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-full border border-rose-200 p-2 text-rose-500 hover:border-rose-400"
-                    onClick={() => handleRemoveWidget(widget.id)}
-                    aria-label="移除"
-                  >
-                    <FiTrash2 />
-                  </button>
+                  <button type="button" className="rounded-full border border-slate-200 p-2 text-slate-500 hover:border-primary hover:text-primary" onClick={() => handleMoveWidget(widget.id, "up")} aria-label="上移"><FiArrowUp /></button>
+                  <button type="button" className="rounded-full border border-slate-200 p-2 text-slate-500 hover:border-primary hover:text-primary" onClick={() => handleMoveWidget(widget.id, "down")} aria-label="下移"><FiArrowDown /></button>
+                  <button type="button" className="rounded-full border border-rose-200 p-2 text-rose-500 hover:border-rose-400" onClick={() => handleRemoveWidget(widget.id)} aria-label="刪除"><FiTrash2 /></button>
                 </div>
               </header>
               <div className="min-h-[200px]">{renderWidget(widget.id, widget.type)}</div>
             </article>
           ))
         )}
+      </section>
+
+      <section className="rounded-2xl bg-white p-4 shadow-sm sm:p-6">
+        <h2 className="text-lg font-semibold">記錄管理</h2>
+        <div className="grid gap-3 sm:grid-cols-3 mt-3">
+          <div>
+            <label className="block text-xs text-slate-500">功課</label>
+            <select className="w-full rounded-lg border border-slate-200 px-3 py-2" value={taskId} onChange={(e) => setTaskId(e.target.value)}>
+              <option value="">（全部）</option>
+              {tasks.map((t) => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500">開始</label>
+            <input className="w-full rounded-lg border border-slate-200 px-3 py-2" type="date" value={start} onChange={(e) => setStart(e.target.value)} />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500">結束</label>
+            <input className="w-full rounded-lg border border-slate-200 px-3 py-2" type="date" value={end} onChange={(e) => setEnd(e.target.value)} />
+          </div>
+        </div>
+        <div className="mt-4">
+          {filtered.length === 0 ? (
+            <p className="text-sm text-slate-500">區間內沒有資料</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="text-left text-slate-500">
+                    <th className="px-2 py-2">日期</th>
+                    <th className="px-2 py-2">功課</th>
+                    <th className="px-2 py-2">遍數</th>
+                    <th className="px-2 py-2">動作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((r) => {
+                    const t = tasks.find((x) => x.id === r.taskId);
+                    return (
+                      <tr key={r.id} className="border-t">
+                        <td className="px-2 py-2">{r.date}</td>
+                        <td className="px-2 py-2">{t?.name ?? r.taskId}</td>
+                        <td className="px-2 py-2">{r.count}</td>
+                        <td className="px-2 py-2">
+                          <div className="flex gap-2">
+                            <button className="rounded border border-slate-200 px-2 py-1" onClick={() => handleEditRecord(r)}>編輯</button>
+                            <button className="rounded border border-rose-200 px-2 py-1 text-rose-600" onClick={() => handleDeleteRecord(r)}>刪除</button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </section>
     </div>
   );

@@ -1,9 +1,10 @@
-import { useEffect, lazy, Suspense } from "react";
+﻿import { useEffect, lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import LoginPage from "./pages/_LoginPage";
 import { supabase } from "./lib/supabaseClient";
 import { usePracticeStore } from "./store/practiceStore";
 import { useAutoSyncLifecycle } from "./hooks/useAutoSyncLifecycle";
+import { useJournalSheetSyncLifecycle } from "./hooks/useJournalSheetSyncLifecycle";
 import LoadingScreen from "./components/LoadingScreen";
 
 const MainLayout = lazy(() => import("./layout/MainLayout"));
@@ -15,12 +16,12 @@ const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const JournalPage = lazy(() => import("./pages/JournalPage"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 const RemindersPage = lazy(() => import("./pages/RemindersPage"));
-const RecordsPage = lazy(() => import("./pages/RecordsPage"));
 const AuthCallbackPage = lazy(() => import("./pages/AuthCallbackPage"));
 
 function App() {
   const setUser = usePracticeStore((s) => s.setUser);
   useAutoSyncLifecycle();
+  useJournalSheetSyncLifecycle();
   useEffect(() => {
     (async () => {
       if (!supabase) return;
@@ -42,7 +43,6 @@ function App() {
           <Route element={<MainLayout />}>
             <Route index element={<Navigate to="/today" replace />} />
             <Route path="/today" element={<TodayPage />} />
-            <Route path="/records" element={<RecordsPage />} />
             <Route path="/tasks" element={<TasksPage />} />
             <Route path="/goals" element={<GoalsPage />} />
             <Route path="/dashboard" element={<DashboardPage />} />
