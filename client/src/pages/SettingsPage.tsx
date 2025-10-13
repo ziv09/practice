@@ -18,11 +18,13 @@ import {
   updateUserSheetTitle,
   deleteRemoteSheet
 } from "../services/sheetSync";
+import { fetchRemoteSnapshot } from "../services/supabaseSync";
 
 function SettingsPage() {
   const setUser = usePracticeStore((s) => s.setUser);
   const tasks = usePracticeStore((s) => s.tasks);
   const exportSnapshot = usePracticeStore((s) => s.exportSnapshot);
+  const userId = usePracticeStore((s) => s.userId);
 
   const [message, setMessage] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -96,7 +98,9 @@ function SettingsPage() {
       options: {
         scopes:
           "openid email profile https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.metadata.readonly https://www.googleapis.com/auth/spreadsheets",
-        redirectTo: `${window.location.origin}/auth/callback`
+        redirectTo: `${window.location.origin}/auth/callback`,
+        // 確保取得可刷新 token（供 Drive/Sheets API 使用）
+        queryParams: { access_type: "offline", prompt: "consent" }
       }
     });
   }
@@ -156,7 +160,17 @@ function SettingsPage() {
       const selectedTasks = tasks
         .filter((t) => selected.includes(t.id))
         .map((t) => ({ id: t.id, name: t.name }));
-      const snapshot = await exportSnapshot();
+      // Prefer local快照，若本地無資料則回退抓取遠端快照
+      let snapshot = await exportSnapshot();
+      if ((!snapshot?.records || snapshot.records.length === 0) && userId) {
+        try {
+          const remote = await fetchRemoteSnapshot(userId);
+          if (remote?.snapshot) snapshot = remote.snapshot;
+        } catch (e) {
+          // ignore and proceed with local snapshot
+          console.warn(e);
+        }
+      }
       const resp = await exportOrUpdateSheet({
         accessToken: token,
         folderId: newSheetFolder?.id,

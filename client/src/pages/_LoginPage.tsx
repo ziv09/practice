@@ -129,6 +129,11 @@ function LoginPage() {
             \u4f7f\u7528 Google \u767b\u5165
           </button>
         </div>
+        <div className="mt-6 flex items-center justify-center gap-3 text-xs text-slate-500">
+          <a className="underline hover:text-primary" href="/privacy" target="_blank" rel="noopener noreferrer">隱私權政策</a>
+          <span>·</span>
+          <a className="underline hover:text-primary" href="/terms" target="_blank" rel="noopener noreferrer">服務條款</a>
+        </div>
       </div>
     </div>
   );

@@ -1,8 +1,8 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import dayjs from "dayjs";
 import isSameOrAfter from "dayjs/plugin/isSameOrAfter";
 dayjs.extend(isSameOrAfter);
-import { FiPlus, FiMinus, FiRefreshCw, FiTrash2 } from "react-icons/fi";
+import { FiRefreshCw, FiTrash2 } from "react-icons/fi";
 import { usePracticeStore } from "../store/practiceStore";
 import { calculateGoalProgress, getRecordForDate } from "../utils/practice";
 
@@ -33,28 +33,25 @@ function TodayPage() {
     [goals, records, today]
   );
 
-  async function handleAdjust(taskId: string, delta: number) {
-    const current = getRecordForDate(records, taskId, today);
-    const nextCount = Math.max(0, (current?.count ?? 0) + delta);
-    await addDailyRecord({ taskId, date: today, count: nextCount, note: current?.note });
-  }
-
-  async function handleCustom(taskId: string) {
-    const value = window.prompt("輸入自訂", String(getRecordForDate(records, taskId, today)?.count ?? 0));
-    if (value === null) return;
-    const parsed = Number(value);
-    if (Number.isNaN(parsed)) {
-      window.alert("請輸入數字");
-      return;
-    }
-    const current = getRecordForDate(records, taskId, today);
-    await addDailyRecord({ taskId, date: today, count: Math.max(0, parsed), note: current?.note });
+  // 直接輸入今日次數：暫存輸入值，按 Enter 或失焦提交
+  const [tempValues, setTempValues] = useState<Record<string, string>>({});
+  async function commitInput(taskId: string) {
+    const raw = tempValues[taskId];
+    const record = getRecordForDate(records, taskId, today);
+    const parsed = Number(raw ?? "");
+    if (!Number.isFinite(parsed)) return;
+    const next = Math.max(0, Math.floor(parsed));
+    await addDailyRecord({ taskId, date: today, count: next, note: record?.note });
+    setTempValues((m) => {
+      const { [taskId]: _omit, ...rest } = m;
+      return rest;
+    });
   }
 
   async function handleDeleteRecord(taskId: string) {
     const current = getRecordForDate(records, taskId, today);
     if (!current) return;
-    const ok = window.confirm("確定要刪除此功課的今日記錄嗎？");
+    const ok = window.confirm("確定要刪除此項目的今日記錄？");
     if (!ok) return;
     await removeDailyRecord(taskId, today);
   }
@@ -62,9 +59,9 @@ function TodayPage() {
   async function handleCopyYesterday() {
     const copyRecords = tasks
       .map((task) => {
-        const yesterdayRecord = getRecordForDate(records, task.id, yesterday);
-        if (!yesterdayRecord) return undefined;
-        return { taskId: task.id, date: today, count: yesterdayRecord.count, note: yesterdayRecord.note };
+        const y = getRecordForDate(records, task.id, yesterday);
+        if (!y) return undefined;
+        return { taskId: task.id, date: today, count: y.count, note: y.note };
       })
       .filter(Boolean) as Array<{ taskId: string; date: string; count: number; note?: string }>;
     if (copyRecords.length === 0) {
@@ -80,7 +77,7 @@ function TodayPage() {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm text-slate-500">{dayjs(today).format("YYYY 年 MM 月 DD 日 dddd")}</p>
-            <h2 className="text-2xl font-semibold text-slate-900">今日已完成項目 {todayTotal}</h2>
+            <h2 className="text-2xl font-semibold text-slate-900">今日已完成項目數：{todayTotal}</h2>
           </div>
           <button
             type="button"
@@ -95,7 +92,7 @@ function TodayPage() {
       <section className="grid gap-4 md:grid-cols-2">
         {tasks.length === 0 ? (
           <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-slate-500">
-            尚未建立功課，請先到功課管理新增。
+            尚未建立項目，請到「習慣管理」新增
           </div>
         ) : (
           tasks.map((task) => {
@@ -107,36 +104,23 @@ function TodayPage() {
                     <h3 className="text-lg font-semibold" style={{ color: task.color }}>
                       {task.name}
                     </h3>
-                    <p className="text-sm text-slate-500">今日完成 {record?.count ?? 0} 次</p>
+                    <p className="text-sm text-slate-500">今日完成：{record?.count ?? 0} 次</p>
                   </div>
                 </div>
                 <div className="mt-4 flex items-center gap-3">
-                  <button
-                    type="button"
-                    className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-300 text-slate-600 transition hover:border-primary hover:text-primary"
-                    onClick={() => handleAdjust(task.id, -1)}
-                    aria-label="減 1"
-                  >
-                    <FiMinus />
-                  </button>
-                  <span className="inline-flex min-w-[56px] justify-center text-xl font-semibold">
-                    {record?.count ?? 0}
-                  </span>
-                  <button
-                    type="button"
-                    className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-primary text-white shadow transition hover:bg-primary/90"
-                    onClick={() => handleAdjust(task.id, 1)}
-                    aria-label="加 1"
-                  >
-                    <FiPlus />
-                  </button>
-                  <button
-                    type="button"
-                    className="ml-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 transition hover:border-primary hover:text-primary"
-                    onClick={() => handleCustom(task.id)}
-                  >
-                    自訂
-                  </button>
+                  <label className="text-sm text-slate-600">今日次數</label>
+                  <input
+                    className="w-28 rounded-lg border border-slate-300 px-3 py-2 text-right"
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    value={tempValues[task.id] ?? String(record?.count ?? 0)}
+                    onChange={(e) => setTempValues((m) => ({ ...m, [task.id]: e.target.value }))}
+                    onBlur={() => commitInput(task.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") void commitInput(task.id);
+                    }}
+                  />
                   {record && (
                     <button
                       type="button"
@@ -163,11 +147,11 @@ function TodayPage() {
                   <div>
                     <p className="font-medium text-slate-700">{goal.name}</p>
                     <p className="text-slate-500">
-                      {progress.totalCompleted}/{goal.targetCount} {goal.mode === "total" ? "總計" : ""}
+                      {progress.totalCompleted}/{goal.targetCount} {goal.mode === "total" ? "總量" : ""}
                       {progress.isBehind ? <span className="ml-2 text-rose-500">進度落後</span> : ""}
                     </p>
                   </div>
-                  <span className="text-xs text-slate-500">建議／每日 {Number.isFinite(progress.suggestedDaily) ? Math.ceil(progress.suggestedDaily) : 0}</span>
+                  <span className="text-xs text-slate-500">建議／每日：{Number.isFinite(progress.suggestedDaily) ? Math.ceil(progress.suggestedDaily) : 0}</span>
                 </div>
                 <div className="h-2 w-full rounded-full bg-slate-200">
                   <div className="h-2 rounded-full bg-primary" style={{ width: `${Math.min(100, progress.progress * 100)}%` }} />

@@ -1,6 +1,7 @@
 Param(
   [string]$SupabaseRef = 'ldwstzdcrkwoainpsrhk',
   [string]$FirebaseProject = 'practice-e2042',
+  [string]$RemindersSchedule = '* * * * *',
   [switch]$SkipSecrets
 )
 
@@ -37,11 +38,16 @@ if (-not $SkipSecrets) {
   $SUPABASE_ANON_KEY = $env:VITE_SUPABASE_ANON_KEY
   $VAPID_PUBLIC_KEY = $env:VITE_VAPID_PUBLIC_KEY
   $VAPID_PRIVATE_KEY = $env:VAPID_PRIVATE_KEY
+  $SERVICE_ROLE_KEY = $env:SUPABASE_SERVICE_ROLE_KEY
 
   if ([string]::IsNullOrWhiteSpace($SUPABASE_URL) -or [string]::IsNullOrWhiteSpace($SUPABASE_ANON_KEY)) {
     Write-Host 'Missing VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY in env. Please input:' -ForegroundColor Yellow
     $SUPABASE_URL = Read-Host "SUPABASE_URL (e.g. https://$SupabaseRef.supabase.co)"
     $SUPABASE_ANON_KEY = Read-Host 'SUPABASE_ANON_KEY'
+  }
+  if ([string]::IsNullOrWhiteSpace($SERVICE_ROLE_KEY)) {
+    Write-Host 'Missing SUPABASE_SERVICE_ROLE_KEY in env. Please input service role key:' -ForegroundColor Yellow
+    $SERVICE_ROLE_KEY = Read-Host 'SUPABASE_SERVICE_ROLE_KEY'
   }
 
   $secretsArgs = @()
@@ -49,6 +55,7 @@ if (-not $SkipSecrets) {
   $secretsArgs += "SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY"
   if (-not [string]::IsNullOrWhiteSpace($VAPID_PUBLIC_KEY)) { $secretsArgs += "VAPID_PUBLIC_KEY=$VAPID_PUBLIC_KEY" }
   if (-not [string]::IsNullOrWhiteSpace($VAPID_PRIVATE_KEY)) { $secretsArgs += "VAPID_PRIVATE_KEY=$VAPID_PRIVATE_KEY" }
+  if (-not [string]::IsNullOrWhiteSpace($SERVICE_ROLE_KEY)) { $secretsArgs += "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY" }
 
   & supabase functions secrets set @secretsArgs
   if ($LASTEXITCODE -ne 0) { throw 'Failed to set secrets.' }
@@ -56,10 +63,14 @@ if (-not $SkipSecrets) {
 
 # 4) Deploy functions
 Write-Host 'Deploying Edge Functions...' -ForegroundColor DarkCyan
-$functions = @('export-journal','sync-journal','rename-sheet','delete-sheet','export-sheets','sync-sheets','sync-practice','register-push','send-push')
+$functions = @('export-journal','sync-journal','rename-sheet','delete-sheet','export-sheets','sync-sheets','sync-practice','register-push','send-push','reminders-cron')
 foreach ($fn in $functions) {
   Write-Host "Deploy: $fn" -ForegroundColor Cyan
-  & supabase functions deploy $fn
+  if ($fn -eq 'reminders-cron') {
+    & supabase functions deploy $fn --schedule $RemindersSchedule
+  } else {
+    & supabase functions deploy $fn
+  }
   if ($LASTEXITCODE -ne 0) { throw "Deploy failed: $fn" }
 }
 

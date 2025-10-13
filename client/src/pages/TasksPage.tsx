@@ -1,4 +1,5 @@
 import { useState } from "react";
+import dayjs from "dayjs";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -13,7 +14,8 @@ const taskSchema = z.object({
   category: z.string().optional().transform((v) => v ?? ""),
   color: z.string().regex(/^#/, "請輸入顏色"),
   allowReminder: z.boolean(),
-  includeInDashboard: z.boolean()
+  includeInDashboard: z.boolean(),
+  initialCount: z.number().min(0).optional().default(0)
 });
 
 type TaskFormValues = z.infer<typeof taskSchema>;
@@ -27,6 +29,7 @@ function TasksPage() {
   const categories = usePracticeStore((state) => state.categories);
   const addCategoryToStore = usePracticeStore((state) => state.addCategory);
   const removeCategoryFromStore = usePracticeStore((state) => state.removeCategory);
+  const addDailyRecord = usePracticeStore((state) => state.addDailyRecord);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<TaskFormValues | null>(null);
@@ -45,17 +48,23 @@ function TasksPage() {
       category: "",
       color: "#a855f7",
       allowReminder: true,
-      includeInDashboard: true
+      includeInDashboard: true,
+      initialCount: 0
     }
   });
 
   async function onSubmit(values: TaskFormValues) {
-    await addTask({
+    const newId = await addTask({
       ...values,
       category: values.category ?? "",
       order: tasks.length,
       isActive: true
     } as unknown as PracticeTask);
+    const today = dayjs().format("YYYY-MM-DD");
+    const init = Number(values.initialCount ?? 0);
+    if (Number.isFinite(init) && init > 0) {
+      await addDailyRecord({ taskId: newId, date: today, count: Math.max(0, Math.floor(init)) });
+    }
     reset();
   }
 
@@ -262,6 +271,15 @@ function TasksPage() {
             <label className="block text-xs text-slate-500">顏色</label>
             <input type="color" className="h-10 w-full cursor-pointer rounded-lg border border-slate-200" {...register("color")} />
           </div>
+          <div>
+            <label className="block text-xs text-slate-500">初始值（選填）</label>
+            <input
+              type="number"
+              min={0}
+              className="w-full rounded-lg border border-slate-200 px-3 py-2"
+              {...register("initialCount", { valueAsNumber: true })}
+            />
+          </div>
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" {...register("allowReminder")} defaultChecked /> 允許提醒
           </label>
@@ -320,4 +338,3 @@ function TasksPage() {
 }
 
 export default TasksPage;
-

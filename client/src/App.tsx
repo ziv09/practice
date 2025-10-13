@@ -1,10 +1,11 @@
-﻿import { useEffect, lazy, Suspense } from "react";
+import { useEffect, lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import LoginPage from "./pages/_LoginPage";
 import { supabase } from "./lib/supabaseClient";
 import { usePracticeStore } from "./store/practiceStore";
 import { useAutoSyncLifecycle } from "./hooks/useAutoSyncLifecycle";
 import { useJournalSheetSyncLifecycle } from "./hooks/useJournalSheetSyncLifecycle";
+import { useSheetSyncLifecycle } from "./hooks/useSheetSyncLifecycle";
 import LoadingScreen from "./components/LoadingScreen";
 import ErrorBoundary from "./components/ErrorBoundary";
 
@@ -18,12 +19,15 @@ const JournalPage = lazy(() => import("./pages/JournalPage"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 const RemindersPage = lazy(() => import("./pages/RemindersPage"));
 const AuthCallbackPage = lazy(() => import("./pages/AuthCallbackPage"));
+const PrivacyPolicyPage = lazy(() => import("./pages/PrivacyPolicyPage"));
+const TermsPage = lazy(() => import("./pages/TermsPage"));
 
 function App() {
   const setUser = usePracticeStore((s) => s.setUser);
   useAutoSyncLifecycle();
   useJournalSheetSyncLifecycle();
-  useEffect(() => {
+    useSheetSyncLifecycle();
+useEffect(() => {
     (async () => {
       if (!supabase) return;
       const { data } = await supabase.auth.getSession();
@@ -56,6 +60,8 @@ function App() {
       <Suspense fallback={<LoadingScreen />}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/privacy" element={<PrivacyPolicyPage />} />
+          <Route path="/terms" element={<TermsPage />} />
           <Route element={<AuthGate />}>
             <Route element={<MainLayout />}>
               <Route index element={<Navigate to="/today" replace />} />

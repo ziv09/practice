@@ -179,8 +179,24 @@ export async function upsertUserJournalSheet(input: { id?: string; title: string
 
 export async function deleteUserJournalSheet(id: string) {
   if (!supabase) throw new Error("Supabase not ready");
-  const { error } = await supabase.from("user_journal_sheets").delete().eq("id", id);
-  if (error) throw error;
+  try {
+    const token = await getGoogleAccessToken();
+    const { data: row } = await supabase.from("user_journal_sheets").select("spreadsheet_id").eq("id", id).maybeSingle();
+    const spreadsheetId = (row as any)?.spreadsheet_id as string | undefined;
+    if (token && spreadsheetId) {
+      try {
+        await deleteRemoteSheet({ accessToken: token, spreadsheetId });
+      } catch (e) {
+        // 若雲端已被刪除或權限失效，避免阻斷本地刪除
+        console.warn(e);
+      }
+    }
+  } catch (e) {
+    console.warn(e);
+  } finally {
+    const { error } = await supabase.from("user_journal_sheets").delete().eq("id", id);
+    if (error) throw error;
+  }
 }
 
 export async function exportOrUpdateJournal(params: { accessToken: string; spreadsheetId?: string; folderId?: string; title: string }) {

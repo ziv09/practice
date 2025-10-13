@@ -10,7 +10,7 @@ function AuthGate() {
   const setUser = usePracticeStore((s) => s.setUser);
 
   useEffect(() => {
-    const unprotected = ["/login", "/auth/callback"]; // 允許回呼與登入頁不受保護
+    const unprotected = ["/login", "/auth/callback"]; // ?�許?�呼?�登?��?不�?保護
     if (unprotected.includes(location.pathname)) return;
     if (userId) return;
     (async () => {
@@ -31,4 +31,5 @@ function AuthGate() {
 }
 
 export default AuthGate;
+
 
